@@ -10,11 +10,15 @@ const EnvSchema = z
     HOST: z.string().default("0.0.0.0"),
     DATABASE_PATH: z.string().default("data/app.sqlite"),
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+    /** Tentatives de connexion / inscription autorisées par minute et par adresse IP. */
+    AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
     /** true derrière HTTPS (tunnel de démo) : le cookie de session n'est alors envoyé qu'en HTTPS. */
     COOKIE_SECURE: booleanFromEnv.default(false),
     FOLLOW_UP_AFTER_DAYS: z.coerce.number().int().positive().default(7),
     /** Adresse du front vue par les clients (lien des devis envoyés). Derrière le tunnel : https://... */
-    PUBLIC_BASE_URL: z.string().url().default("http://localhost:5173"),
+    PUBLIC_BASE_URL: z.preprocess(emptyAsUndefined, z.string().url().optional()),
+    /** Fichier où `npm run tunnel` écrit l'adresse du tunnel en cours (cf. public-url.ts). */
+    TUNNEL_URL_FILE: z.string().default("data/tunnel-url.txt"),
 
     // Dictées
     CLIPS_DIR: z.string().default("data/clips"),

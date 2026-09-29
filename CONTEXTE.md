@@ -130,5 +130,4 @@ Le devis affiche le total HT, la TVA par taux, puis le total TTC. Pour les auto-
 | **Prix :** catalogue prérempli (et lequel), tarifs de l'artisan, ou prix proposé puis corrigé ? Par défaut côté technique, un champ prix modifiable par ligne. | Brandon |
 | Modèle économique, marché, acquisition | Brandon, Ben |
 | Maquettes et identité visuelle | Aurélie, Olive |
-| Mise en place du tunnel HTTPS (adresse publique du front) | Thomas |
 | Fournisseur du LLM hébergé | Thomas |

@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { hashPassword } from "../src/auth/password.js";
 import { config } from "../src/config.js";
+import { createPublicUrlResolver } from "../src/public-url.js";
 import { execute, openDatabase, queryAll } from "../src/db/database.js";
 import { createUser, findUserByEmail } from "../src/repositories/users.js";
 import { updateCompany } from "../src/repositories/companies.js";
@@ -29,7 +30,7 @@ const quotes = createQuoteService(db, {
   followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
   clipsDir: config.CLIPS_DIR,
   photosDir: config.PHOTOS_DIR,
-  publicBaseUrl: config.PUBLIC_BASE_URL,
+  publicBaseUrl: createPublicUrlResolver(config),
   // Le seed n'envoie jamais d'e-mail.
   mailer: { async send() {} },
 });

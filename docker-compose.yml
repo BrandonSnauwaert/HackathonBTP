@@ -26,5 +26,16 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # Tunnel HTTPS public vers le front (Cloudflare « quick tunnel » : gratuit, sans compte ni domaine).
+  # L'adresse change à chaque lancement : utiliser `npm run tunnel` (apps/server), qui la récupère.
+  # Profil « tunnel » : jamais démarré par un simple `docker compose up`.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    # Host réécrit en localhost:5173 : Vite accepte la requête comme si elle venait du PC.
+    command: tunnel --no-autoupdate --url http://host.docker.internal:5173 --http-host-header localhost:5173
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   hf-cache:

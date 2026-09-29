@@ -68,6 +68,11 @@ export function findSessionUser(db: Database, token: string): User | undefined {
   return findUserById(db, session.user_id);
 }
 
+/** Nettoyage au démarrage : les sessions expirées ne servent plus à rien. */
+export function deleteExpiredSessions(db: Database): number {
+  return execute(db, "DELETE FROM sessions WHERE expires_at <= :now", { now: new Date().toISOString() });
+}
+
 export function deleteSession(db: Database, token: string): void {
   execute(db, "DELETE FROM sessions WHERE token_hash = :hash", { hash: hashToken(token) });
 }

@@ -15,6 +15,11 @@ function toBuffer(data: RawData): Buffer {
  */
 export const transcriptionRoutes: FastifyPluginAsync<{ config: Config }> = async (app, { config }) => {
   app.get("/ws", { websocket: true, schema: { hide: true } }, (socket, request) => {
+    if (!request.user) {
+      // 4401 : code applicatif « connexion requise », lu par le front.
+      socket.close(4401, "Connexion requise");
+      return;
+    }
     request.log.info({ transcriber: config.TRANSCRIBER }, "client WebSocket connecté");
     const transcriber = createTranscriber(config, request.log);
 

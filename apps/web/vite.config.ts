@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Écoute sur toutes les interfaces : le tunnel (conteneur Docker) doit pouvoir joindre Vite.
+    host: true,
     // API, doc et WebSocket passent par Vite : même origine que la page (cookie de session, pas de CORS).
     proxy: {
       "/api": "http://localhost:3000",

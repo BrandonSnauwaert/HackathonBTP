@@ -17,6 +17,8 @@ const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
 const photosDir = mkdtempSync(join(tmpdir(), "photos-"));
 const config = parseConfig({
   DATABASE_PATH: ":memory:",
+  PUBLIC_BASE_URL: "http://localhost:5173",
+  AUTH_RATE_LIMIT: "1000",
   CLIPS_DIR: clipsDir,
   PHOTOS_DIR: photosDir,
   MAX_PHOTO_MB: "1",
@@ -704,6 +706,47 @@ describe("API", () => {
     });
     assert.equal(res.statusCode, 400);
     assert.equal(res.json().error, "invalid_audio");
+  });
+
+  it("réserve la transcription en direct aux utilisateurs connectés", async () => {
+    const closeCode = (headers: Record<string, string>) =>
+      app.injectWS("/ws", { headers }).then(
+        (ws) =>
+          new Promise<number>((resolve) => {
+            ws.on("close", (code) => resolve(code));
+            setTimeout(() => {
+              ws.close();
+              resolve(0); // toujours ouvert après 300 ms : accepté
+            }, 300);
+          }),
+      );
+    assert.equal(await closeCode({}), 4401, "refusée sans session");
+    const api = await signUp("live@test.fr");
+    assert.equal(await closeCode({ cookie: `sid=${api.cookies.sid}` }), 0, "acceptée avec une session");
+  });
+
+  it("limite les tentatives de connexion", async () => {
+    const limited = await buildApp({
+      config: parseConfig({ DATABASE_PATH: ":memory:", AUTH_RATE_LIMIT: "3" }),
+      db: openDatabase(":memory:"),
+      logger: false,
+      mailer: fakeMailer,
+    });
+    try {
+      const attempt = () =>
+        limited.inject({
+          method: "POST",
+          url: "/api/auth/login",
+          payload: { email: "x@y.fr", password: "mauvais-mdp" },
+        });
+      for (let i = 0; i < 3; i++) assert.equal((await attempt()).statusCode, 401);
+      const blocked = await attempt();
+      assert.equal(blocked.statusCode, 429);
+      assert.equal(blocked.json().error, "too_many_requests");
+      assert.match(blocked.json().message, /Trop de tentatives/);
+    } finally {
+      await limited.close();
+    }
   });
 
   it("expose la doc OpenAPI", async () => {

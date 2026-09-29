@@ -33,6 +33,8 @@ export interface paths {
                             transcriber: string;
                             llm: string;
                             email: string;
+                            /** @description Adresse utilisée dans les liens envoyés aux clients */
+                            publicUrl: string;
                         };
                     };
                 };
@@ -142,6 +144,15 @@ export interface paths {
                 };
                 /** @description Default Response */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                429: {
                     headers: {
                         [name: string]: unknown;
                     };
