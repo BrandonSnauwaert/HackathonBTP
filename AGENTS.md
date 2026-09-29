@@ -28,7 +28,13 @@ apps/server/            API Node.js (Fastify, TypeScript)
   samples/              audio de test (chantier-fr.wav)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
   openapi.json          doc OpenAPI exportée (générée : npm run openapi)
-apps/web/               PWA React (Vite, TypeScript) — pour l'instant des pages de test, en attendant les maquettes
+apps/front/             application de l'artisan (React, Vite), d'après la maquette « Devis Vocal » (claude.ai/design)
+  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), connexion
+  src/components/       cadre (barre latérale sur ordinateur), badges, bouton talkie-walkie, ligne de devis, totaux
+  src/quotes/           useQuote (chargement, modifications, dictées), statuts, regroupement des lignes par pièce
+  src/router.ts         navigation par hash (#/devis/:id…), sans dépendance
+  src/api, src/audio, src/images   repris de apps/web (schema.d.ts généré de la même façon)
+apps/web/               PWA React (Vite, TypeScript) — pages de test de l'API
   public/pcm-recorder-worklet.js   capture micro vers PCM 24 kHz
   src/api/              client de l'API ; schema.d.ts = types générés depuis openapi.json
   src/audio/            micro (AudioWorklet), enregistrement talkie-walkie (useClipRecorder), encodage WAV
@@ -59,7 +65,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [ ] Tunnel HTTPS pour que le lien de l'e-mail et le micro fonctionnent depuis un téléphone
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
-- [ ] Front définitif : liste des devis, écran d'édition (en attente des maquettes UI/UX)
+- [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, validation), suivi (chronologie, relance, accepté / refusé). Mobile et ordinateur.
+- [ ] Front : page client (E6), vrai envoi depuis l'écran Envoi, file hors connexion, thème sombre
 - [ ] Page publique du devis (lien secret) avec « Accepter » et « Refuser », suivi de consultation, pixel
 - [ ] Envoi de l'e-mail (service à choisir) et tunnel HTTPS vers le PC de démo
 - [ ] Bonus : PDF conforme, photos, relances automatiques
@@ -83,6 +90,7 @@ git clone https://github.com/BrandonSnauwaert/HackathonBTP.git
 cd HackathonBTP
 cd apps/server; npm install; copy .env.example .env; npm run seed:demo
 cd ../web; npm install
+cd ../front; npm install
 ```
 
 - `npm install` **active les hooks git** du dépôt (`.githooks/`) : chaque commit est vérifié automatiquement (voir « Vérifier son travail »).
@@ -101,18 +109,21 @@ docker compose up -d kyutai-stt          # STT (GPU NVIDIA requis). Premier buil
 cd apps/server; npm run seed:demo   # (ré)initialise le compte demo@artisan.test / demo1234
 npm run dev                          # doc interactive de l'API : http://localhost:3000/docs
 
-# 3. Front (port 5173, fait proxy de /api, /docs et /ws vers :3000)
+# 3. Front de l'artisan (port 5174, fait proxy de /api et /docs vers :3000)
+cd apps/front; npm run dev
+
+# Pages de test de l'API (port 5173, fait proxy de /api, /docs et /ws vers :3000)
 cd apps/web; npm run dev
 ```
 
 ## Vérifier son travail
 
-**Hook git `pre-commit`** (`.githooks/pre-commit`) : à chaque commit, `npm run check` est lancé dans l'application touchée (`apps/server` et/ou `apps/web`), en ~10 s. **Si une vérification échoue, le commit est refusé.** Ne pas contourner avec `--no-verify` : corriger. Pour les agents : lancer `npm run check` **avant** de commiter.
+**Hook git `pre-commit`** (`.githooks/pre-commit`) : à chaque commit, `npm run check` est lancé dans l'application touchée (`apps/server`, `apps/web` et/ou `apps/front`), en ~10 s. **Si une vérification échoue, le commit est refusé.** Ne pas contourner avec `--no-verify` : corriger. Pour les agents : lancer `npm run check` **avant** de commiter.
 
 | Commande | Où | Rôle |
 |---|---|---|
 | `npm run check` | apps/server | tout : formatage, analyse du code, types, tests, doc OpenAPI à jour (= hook) |
-| `npm run check` | apps/web | tout : formatage, analyse du code, types et build (= hook) |
+| `npm run check` | apps/web, apps/front | tout : formatage, analyse du code, types et build (= hook) |
 | `npm run format` | les deux | reformate automatiquement le code (Prettier) |
 | `npm run lint` | les deux | analyse du code (oxlint) |
 | `npm run typecheck` | apps/server | types du serveur et des scripts |
@@ -129,7 +140,7 @@ cd apps/web; npm run dev
 ## Travailler à plusieurs
 
 - **Une branche par fonctionnalité** (`feat/envoi-email`, `fix/dernier-mot`…), des commits petits et fréquents. Avant de pousser : `git pull --rebase origin main`. Jamais de `git push --force` sur `main`.
-- **Frontière front / serveur = l'API documentée.** Les types du front (`apps/web/src/api/schema.d.ts`) sont **générés** depuis `apps/server/openapi.json`, lui-même généré depuis le code : ne jamais les écrire à la main. Qui change l'API lance `npm run openapi` (dans apps/server) et commite les deux fichiers générés. Le hook refuse un `openapi.json` pas à jour.
+- **Frontière front / serveur = l'API documentée.** Les types des fronts (`apps/web/src/api/schema.d.ts`, `apps/front/src/api/schema.d.ts`) sont **générés** depuis `apps/server/openapi.json`, lui-même généré depuis le code : ne jamais les écrire à la main. Qui change l'API lance `npm run openapi` (dans apps/server) et commite les deux fichiers générés. Le hook refuse un `openapi.json` pas à jour.
 - **Style** : Prettier décide (config dans `.prettierrc.json`, 120 colonnes). Pas de débat de formatage, `npm run format` et c'est réglé.
 - Conflit sur un fichier généré (`openapi.json`, `schema.d.ts`) : ne pas le résoudre à la main, relancer `npm run openapi`.
 
