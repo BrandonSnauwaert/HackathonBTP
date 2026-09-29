@@ -10,6 +10,7 @@ import {
   LineUpdateSchema,
   QuoteCreateSchema,
   QuoteDetailSchema,
+  QuoteDocumentSchema,
   QuoteStatusSchema,
   QuoteSummarySchema,
   QuoteUpdateSchema,
@@ -125,6 +126,38 @@ export const quoteRoutes: FastifyPluginAsyncZod<{ quotes: QuoteService }> = asyn
       },
     },
     async (request) => quotes.changeStatus(requireUser(request).id, request.params.id, request.body.status),
+  );
+
+  app.post(
+    "/:id/send",
+    {
+      schema: {
+        tags: quoteTags,
+        security,
+        summary: "Envoyer le devis (il doit être « prêt à envoyer »)",
+        description:
+          "Passe le devis en « envoyé » et rend son lien public (`publicUrl`) accessible. " +
+          "Le devis n'est plus modifiable. L'envoi par e-mail viendra s'y ajouter ; en attendant, " +
+          "l'artisan peut partager le lien lui-même.",
+        params: IdParams,
+        response: { 200: QuoteDetailSchema, ...errors },
+      },
+    },
+    async (request) => quotes.send(requireUser(request).id, request.params.id),
+  );
+
+  app.get(
+    "/:id/document",
+    {
+      schema: {
+        tags: quoteTags,
+        security,
+        summary: "Aperçu du document client (à tout moment, sans suivi)",
+        params: IdParams,
+        response: { 200: QuoteDocumentSchema, ...errors },
+      },
+    },
+    async (request) => quotes.preview(requireUser(request).id, request.params.id),
   );
 
   app.post(

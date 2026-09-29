@@ -90,7 +90,7 @@ brouillon ⇄ prêt ──► envoyé ──► consulté ──► accepté / r
 | Brouillon | `draft` | En cours de rédaction : dictées pas toutes traitées, ou lignes à compléter | création ; toute modification d'un devis « prêt » |
 | Prêt à envoyer | `ready` | Complet (profil entreprise, e-mail du client, lignes chiffrées) | l'artisan valide |
 | Envoyé | `sent` | E-mail parti | envoi |
-| Consulté | `viewed` | Le client a ouvert la page du devis (ou le pixel a été chargé) | automatique |
+| Consulté | `viewed` | Le client a ouvert la page du devis. Le pixel de l'e-mail n'est noté qu'à titre indicatif dans l'historique (faux positifs d'Apple Mail). | automatique |
 | À relancer | `follow_up` | Pas de réponse **7 jours** après l'envoi (délai réglable) | automatique |
 | Accepté / Refusé | `accepted` / `declined` | Réponse du client | le client sur la page du devis (« Accepter » / « Refuser »), ou l'artisan à la main (réponse orale) |
 | Expiré | `expired` | Durée de validité dépassée sans réponse | automatique |

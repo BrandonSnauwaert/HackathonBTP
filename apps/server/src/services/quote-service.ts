@@ -17,7 +17,8 @@ import { HttpError, conflict } from "../http/errors.js";
 import { countLinesByClip, listClips, toClipView, type ClipView } from "../repositories/clips.js";
 import { createClient, getClient, type Client, type ClientInput } from "../repositories/clients.js";
 import { companyIssues, getCompany } from "../repositories/companies.js";
-import { listPhotos, toPhotoView, type PhotoView } from "../repositories/photos.js";
+import { getPhoto, listPhotos, toPhotoView, type PhotoView } from "../repositories/photos.js";
+import { buildQuoteDocument, quoteResponse, type QuoteDocument } from "./quote-document.js";
 import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
 import type { ExtractedLine } from "../llm/line-extractor.js";
@@ -30,6 +31,8 @@ export interface QuoteServiceOptions {
   clipsDir: string;
   /** Dossier des photos (supprimées avec le devis). */
   photosDir: string;
+  /** URL publique du front, pour construire le lien envoyé au client (ex. https://devis.mondomaine.fr). */
+  publicBaseUrl: string;
 }
 
 export type QuoteLineView = QuoteLine & { unitLabel: string; totalHtCents: number | null };
@@ -57,6 +60,11 @@ export interface QuoteDetail {
   allowedTransitions: QuoteStatus[];
   clips: ClipView[];
   photos: PhotoView[];
+  /** Lien de la page publique à envoyer au client (null tant que le devis n'est pas envoyé). */
+  publicUrl: string | null;
+  /** Réponse du client, s'il a accepté ou refusé en ligne. */
+  response: QuoteDocument["response"];
+  viewedAt: string | null;
   events: QuoteEvent[];
 }
 
@@ -150,6 +158,30 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     return listClips(db, quoteId).map((clip) => toClipView(clip, lineCounts.get(clip.id) ?? 0));
   }
 
+  function publicUrl(quote: Quote): string {
+    return `${options.publicBaseUrl.replace(/\/$/, "")}/d/${quote.publicToken}`;
+  }
+
+  function documentOf(userId: string, quote: Quote, preview: boolean): QuoteDocument {
+    return buildQuoteDocument({
+      quote,
+      company: getCompany(db, userId),
+      client: getClient(db, userId, quote.clientId),
+      lines: repo.listLines(db, quote.id),
+      photos: listPhotos(db, quote.id).filter((p) => p.visibleToClient),
+      photoUrl: (photo) =>
+        preview ? toPhotoView(photo).url : `/api/public/quotes/${quote.publicToken}/photos/${photo.id}`,
+      preview,
+    });
+  }
+
+  /** Devis accessible par son lien public : uniquement une fois envoyé (jamais un brouillon). */
+  function findPublic(token: string): { quote: Quote; userId: string } {
+    const found = repo.findQuoteByPublicToken(db, token);
+    if (!found || isEditable(found.quote.status)) throw new HttpError(404, "not_found", "Devis introuvable");
+    return { quote: refresh(found.quote), userId: found.userId };
+  }
+
   function detail(userId: string, quoteId: string): QuoteDetail {
     const quote = refresh(repo.getQuote(db, userId, quoteId));
     const client = getClient(db, userId, quote.clientId);
@@ -186,6 +218,9 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       allowedTransitions: allowedTransitions(quote.status, "artisan").filter((s) => MANUAL_STATUSES.includes(s)),
       clips: listClipViews(quote.id),
       photos: listPhotos(db, quote.id).map(toPhotoView),
+      publicUrl: isEditable(quote.status) ? null : publicUrl(quote),
+      response: quoteResponse(quote),
+      viewedAt: quote.viewedAt,
       events: repo.listEvents(db, quote.id),
     };
   }
@@ -285,6 +320,100 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
         for (const line of lines) repo.insertLine(db, quote.id, { ...line, source: "dictation", clipId });
         touch(quote);
       });
+    },
+
+    /**
+     * Envoie le devis : il passe en « envoyé », sa date devient la date d'envoi et son lien public
+     * devient accessible. (L'e-mail au client viendra se brancher ici.)
+     */
+    send(userId: string, quoteId: string): QuoteDetail {
+      const quote = refresh(repo.getQuote(db, userId, quoteId));
+      if (quote.status !== "ready") {
+        const hint = quote.status === "draft" ? " : le passer d'abord en « prêt à envoyer »" : "";
+        throw conflict("quote_not_ready", `Un devis « ${STATUS_LABELS[quote.status]} » ne peut pas être envoyé${hint}`);
+      }
+      transaction(db, () => {
+        repo.updateQuote(db, quote.id, { status: "sent", sentAt: new Date().toISOString() });
+        repo.insertEvent(db, quote.id, { type: "sent", actor: "artisan", fromStatus: "ready", toStatus: "sent" });
+      });
+      return detail(userId, quoteId);
+    },
+
+    /** Aperçu du document pour l'artisan, à tout moment (aucun suivi). */
+    preview(userId: string, quoteId: string): QuoteDocument {
+      return documentOf(userId, refresh(repo.getQuote(db, userId, quoteId)), true);
+    },
+
+    /** Page publique : le client ouvre le lien. La première ouverture fait passer le devis en « consulté ». */
+    openPublic(token: string): QuoteDocument {
+      const { quote, userId } = findPublic(token);
+      if (quote.viewedAt === null) {
+        const now = new Date().toISOString();
+        transaction(db, () => {
+          repo.updateQuote(
+            db,
+            quote.id,
+            quote.status === "sent" ? { viewedAt: now, status: "viewed" } : { viewedAt: now },
+          );
+          repo.insertEvent(
+            db,
+            quote.id,
+            quote.status === "sent"
+              ? { type: "viewed", actor: "client", fromStatus: "sent", toStatus: "viewed" }
+              : { type: "viewed", actor: "client" },
+          );
+        });
+      }
+      return documentOf(userId, repo.getQuote(db, userId, quote.id), false);
+    },
+
+    /** Réponse du client depuis la page publique. */
+    respond(
+      token: string,
+      decision: "accepted" | "declined",
+      answer: { name: string; message?: string | undefined },
+    ): QuoteDocument {
+      const { quote, userId } = findPublic(token);
+      if (quote.status === "accepted" || quote.status === "declined") {
+        throw conflict("already_answered", "Vous avez déjà répondu à ce devis");
+      }
+      if (quote.status === "expired") throw conflict("quote_expired", "Ce devis a expiré : contactez l'entreprise");
+      if (!canTransition(quote.status, decision, "client")) {
+        throw conflict("invalid_transition", "Ce devis ne peut pas recevoir de réponse");
+      }
+      transaction(db, () => {
+        repo.updateQuote(db, quote.id, {
+          status: decision,
+          respondedAt: new Date().toISOString(),
+          responseName: answer.name,
+          responseMessage: answer.message ?? "",
+        });
+        repo.insertEvent(db, quote.id, {
+          type: "status_changed",
+          actor: "client",
+          fromStatus: quote.status,
+          toStatus: decision,
+        });
+      });
+      return documentOf(userId, repo.getQuote(db, userId, quote.id), false);
+    },
+
+    /** Photo partagée avec le client (les autres restent privées). */
+    publicPhotoFile(token: string, photoId: string): { path: string; mimeType: string } {
+      const { quote } = findPublic(token);
+      const photo = getPhoto(db, quote.id, photoId);
+      if (!photo.visibleToClient) throw new HttpError(404, "not_found", "Photo introuvable");
+      return { path: join(options.photosDir, photo.file), mimeType: photo.mimeType };
+    },
+
+    /**
+     * Pixel de suivi chargé par le logiciel de messagerie. Simple indication dans l'historique :
+     * Apple Mail précharge les images, donc cela ne change jamais le statut du devis.
+     */
+    recordEmailOpen(token: string): void {
+      const found = repo.findQuoteByPublicToken(db, token);
+      if (!found || isEditable(found.quote.status)) return;
+      repo.insertEvent(db, found.quote.id, { type: "email_opened", actor: "client" });
     },
 
     changeStatus(userId: string, quoteId: string, to: QuoteStatus, actor: Actor = "artisan"): QuoteDetail {

@@ -451,6 +451,153 @@ describe("API", () => {
     assert.equal(existsSync(join(photosDir, `${photo.id}.jpg`)), false);
   });
 
+  describe("envoi et page client", () => {
+    /** Artisan avec un profil complet et un devis prêt à envoyer (une ligne chiffrée). */
+    async function readyQuote(email: string) {
+      const api = await signUp(email);
+      await api("PATCH", "/api/company", {
+        name: "Martin Rénovation",
+        legalForm: "SARL",
+        address: "3 avenue du Chantier, 69000 Lyon",
+        siret: "12345678900012",
+        vatNumber: "FR12123456789",
+        insurerName: "Assurance Exemple",
+      });
+      const quote = (
+        await api("POST", "/api/quotes", {
+          client: { name: "Mme Durand", email: "durand@example.com" },
+          title: "Cuisine",
+          notes: "Note interne : chien méchant",
+        })
+      ).json();
+      await api("POST", `/api/quotes/${quote.id}/lines`, {
+        description: "Remplacement porte",
+        quantity: 1,
+        unit: "u",
+        unitPriceCents: 45000,
+        vatRateBp: 1000,
+      });
+      return { api, quote };
+    }
+    const tokenOf = (publicUrl: string) => publicUrl.split("/d/")[1] ?? "";
+    const publicApi = (method: "GET" | "POST", path: string, payload?: object) =>
+      app.inject({ method, url: `/api/public/quotes/${path}`, ...(payload ? { payload } : {}) });
+
+    it("n'envoie qu'un devis prêt, puis le fige et donne son lien", async () => {
+      const { api, quote } = await readyQuote("envoi@test.fr");
+      let res = await api("POST", `/api/quotes/${quote.id}/send`);
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.json().error, "quote_not_ready");
+
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      res = await api("POST", `/api/quotes/${quote.id}/send`);
+      assert.equal(res.statusCode, 200, res.body);
+      const sent = res.json();
+      assert.equal(sent.status, "sent");
+      assert.ok(sent.sentAt);
+      assert.match(sent.publicUrl, /^http:\/\/localhost:5173\/d\/[A-Za-z0-9_-]{20,}$/);
+
+      res = await api("PATCH", `/api/quotes/${quote.id}`, { title: "Modifié" });
+      assert.equal(res.statusCode, 409, "un devis envoyé n'est plus modifiable");
+      assert.equal((await api("GET", `/api/quotes/${quote.id}`)).json().publicUrl, sent.publicUrl);
+    });
+
+    it("ouvre la page client : document sans données internes, passage en « consulté »", async () => {
+      const { api, quote } = await readyQuote("page@test.fr");
+      // Deux photos : une partagée avec le client, une privée
+      const upload = () =>
+        app.inject({
+          method: "POST",
+          url: `/api/quotes/${quote.id}/photos`,
+          headers: { "content-type": "image/jpeg" },
+          cookies: api.cookies,
+          payload: jpeg,
+        });
+      const shared = (await upload()).json();
+      const hidden = (await upload()).json();
+      await api("PATCH", `/api/quotes/${quote.id}/photos/${shared.id}`, { visibleToClient: true, caption: "Avant" });
+
+      // Aperçu de l'artisan avant envoi : pas de suivi, pas de réponse possible
+      const preview = (await api("GET", `/api/quotes/${quote.id}/document`)).json();
+      assert.equal(preview.preview, true);
+      assert.equal(preview.canRespond, false);
+
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const token = tokenOf((await api("POST", `/api/quotes/${quote.id}/send`)).json().publicUrl);
+
+      const res = await publicApi("GET", token);
+      assert.equal(res.statusCode, 200, res.body);
+      const doc = res.json();
+      assert.equal(doc.status, "viewed");
+      assert.equal(doc.canRespond, true);
+      assert.equal(doc.company.siret, "12345678900012");
+      assert.equal(doc.company.insurerName, "Assurance Exemple");
+      assert.equal(doc.totals.totalTtcCents, 49500);
+      assert.equal(doc.lines[0].description, "Remplacement porte");
+      assert.deepEqual(
+        doc.photos.map((p: { caption: string }) => p.caption),
+        ["Avant"],
+        "seule la photo partagée est visible",
+      );
+      assert.equal(res.body.includes("chien méchant"), false, "les notes internes ne sortent pas");
+      assert.equal("clips" in doc || "issues" in doc || "events" in doc, false);
+
+      // Photos : partagée accessible sans connexion, privée introuvable
+      assert.equal((await app.inject({ method: "GET", url: doc.photos[0].url })).statusCode, 200);
+      assert.equal((await publicApi("GET", `${token}/photos/${hidden.id}`)).statusCode, 404);
+
+      // Une seconde ouverture ne rajoute pas d'événement
+      await publicApi("GET", token);
+      const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+      assert.ok(detail.viewedAt);
+      assert.equal(detail.events.filter((e: { type: string }) => e.type === "viewed").length, 1);
+    });
+
+    it("pixel : note l'ouverture de l'e-mail sans changer le statut", async () => {
+      const { api, quote } = await readyQuote("pixel@test.fr");
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const token = tokenOf((await api("POST", `/api/quotes/${quote.id}/send`)).json().publicUrl);
+
+      const res = await publicApi("GET", `${token}/pixel.gif`);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.headers["content-type"], "image/gif");
+      const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+      assert.equal(detail.status, "sent", "le pixel ne vaut pas consultation");
+      assert.ok(detail.events.some((e: { type: string }) => e.type === "email_opened"));
+
+      // Lien inconnu : l'image est quand même renvoyée (rien à apprendre pour un curieux)
+      assert.equal((await publicApi("GET", "inconnu-inconnu-inconnu/pixel.gif")).statusCode, 200);
+    });
+
+    it("accepte le devis une seule fois, avec le nom du client", async () => {
+      const { api, quote } = await readyQuote("accord@test.fr");
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const token = tokenOf((await api("POST", `/api/quotes/${quote.id}/send`)).json().publicUrl);
+
+      let res = await publicApi("POST", `${token}/accept`, {});
+      assert.equal(res.statusCode, 400, "le nom vaut signature : obligatoire");
+
+      res = await publicApi("POST", `${token}/accept`, { name: "Sophie Durand", message: "Parfait, merci" });
+      assert.equal(res.statusCode, 200, res.body);
+      assert.equal(res.json().status, "accepted");
+      assert.equal(res.json().canRespond, false);
+
+      const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+      assert.equal(detail.status, "accepted");
+      assert.equal(detail.response.name, "Sophie Durand");
+      assert.equal(detail.response.message, "Parfait, merci");
+
+      res = await publicApi("POST", `${token}/decline`, {});
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.json().error, "already_answered");
+    });
+
+    it("refuse un lien inconnu ou mal formé", async () => {
+      assert.equal((await publicApi("GET", "abcdefghijklmnopqrstuvwxyz")).statusCode, 404);
+      assert.equal((await publicApi("GET", "trop-court")).statusCode, 400);
+    });
+  });
+
   it("refuse un audio invalide", async () => {
     const api = await signUp("audio@test.fr");
     const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();

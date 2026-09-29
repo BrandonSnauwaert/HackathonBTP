@@ -331,6 +331,38 @@
           }
         }
       },
+      "AcceptQuoteInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Nom et prénom du client : vaut signature"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "DeclineQuoteInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "message": {
+            "description": "Motif du refus (facultatif)",
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
       "QuoteCreateInput": {
         "type": "object",
         "properties": {
@@ -1009,6 +1041,274 @@
         ],
         "additionalProperties": false
       },
+      "QuoteResponse": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "declined"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Nom saisi par le client (vaut signature pour une acceptation)"
+          },
+          "message": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "description": "Date ISO 8601"
+          }
+        },
+        "required": [
+          "decision",
+          "name",
+          "message",
+          "at"
+        ],
+        "additionalProperties": false,
+        "description": "Réponse du client depuis la page publique"
+      },
+      "QuoteDocument": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/QuoteStatus"
+          },
+          "statusLabel": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string",
+            "description": "Date du devis : date d'envoi (ou de création pour un aperçu)"
+          },
+          "validUntil": {
+            "type": "string",
+            "description": "Date ISO 8601"
+          },
+          "validityDays": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "siteAddress": {
+            "type": "string"
+          },
+          "startDate": {
+            "nullable": true,
+            "type": "string"
+          },
+          "duration": {
+            "type": "string"
+          },
+          "paymentTerms": {
+            "type": "string"
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "legalForm": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "siret": {
+                "type": "string"
+              },
+              "vatNumber": {
+                "type": "string"
+              },
+              "insurerName": {
+                "type": "string"
+              },
+              "insurancePolicyNumber": {
+                "type": "string"
+              },
+              "insuranceCoverage": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "legalForm",
+              "address",
+              "phone",
+              "email",
+              "siret",
+              "vatNumber",
+              "insurerName",
+              "insurancePolicyNumber",
+              "insuranceCoverage"
+            ],
+            "additionalProperties": false
+          },
+          "client": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "phone",
+              "address"
+            ],
+            "additionalProperties": false
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "description": {
+                  "type": "string"
+                },
+                "room": {
+                  "type": "string"
+                },
+                "quantity": {
+                  "type": "number"
+                },
+                "unitLabel": {
+                  "type": "string"
+                },
+                "unitPriceCents": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Prix unitaire HT (centimes)"
+                },
+                "vatRateBp": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "totalHtCents": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Total HT de la ligne (centimes)"
+                }
+              },
+              "required": [
+                "position",
+                "description",
+                "room",
+                "quantity",
+                "unitLabel",
+                "unitPriceCents",
+                "vatRateBp",
+                "totalHtCents"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/QuoteTotals"
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "caption": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "caption",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "response": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteResponse"
+              }
+            ]
+          },
+          "canRespond": {
+            "type": "boolean",
+            "description": "Afficher les boutons Accepter / Refuser"
+          },
+          "preview": {
+            "type": "boolean",
+            "description": "Aperçu de l'artisan (aucun suivi, pas de réponse possible)"
+          }
+        },
+        "required": [
+          "number",
+          "title",
+          "status",
+          "statusLabel",
+          "issuedAt",
+          "validUntil",
+          "validityDays",
+          "siteAddress",
+          "startDate",
+          "duration",
+          "paymentTerms",
+          "company",
+          "client",
+          "lines",
+          "totals",
+          "photos",
+          "response",
+          "canRespond",
+          "preview"
+        ],
+        "additionalProperties": false,
+        "description": "Le devis tel que le client le voit, avec les mentions légales"
+      },
       "QuoteDetail": {
         "type": "object",
         "properties": {
@@ -1113,6 +1413,24 @@
             },
             "description": "Photos de chantier du devis"
           },
+          "publicUrl": {
+            "nullable": true,
+            "description": "Lien de la page client (null tant que le devis n'est pas envoyé)",
+            "type": "string"
+          },
+          "response": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteResponse"
+              }
+            ]
+          },
+          "viewedAt": {
+            "nullable": true,
+            "description": "Première ouverture de la page par le client",
+            "type": "string"
+          },
           "events": {
             "type": "array",
             "items": {
@@ -1143,6 +1461,9 @@
           "allowedTransitions",
           "clips",
           "photos",
+          "publicUrl",
+          "response",
+          "viewedAt",
           "events"
         ],
         "additionalProperties": false
@@ -2254,6 +2575,161 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QuoteDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/quotes/{id}/send": {
+      "post": {
+        "summary": "Envoyer le devis (il doit être « prêt à envoyer »)",
+        "tags": [
+          "Devis"
+        ],
+        "description": "Passe le devis en « envoyé » et rend son lien public (`publicUrl`) accessible. Le devis n'est plus modifiable. L'envoi par e-mail viendra s'y ajouter ; en attendant, l'artisan peut partager le lien lui-même.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/quotes/{id}/document": {
+      "get": {
+        "summary": "Aperçu du document client (à tout moment, sans suivi)",
+        "tags": [
+          "Devis"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDocument"
                 }
               }
             }
@@ -3517,6 +3993,272 @@
           }
         }
       }
+    },
+    "/api/public/quotes/{token}": {
+      "get": {
+        "summary": "Ouvrir le devis (page client)",
+        "tags": [
+          "Page client"
+        ],
+        "description": "La première ouverture fait passer le devis de « envoyé » à « consulté ».",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,64}$"
+            },
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "description": "Secret du lien public du devis"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/quotes/{token}/accept": {
+      "post": {
+        "summary": "Accepter le devis (bon pour accord)",
+        "tags": [
+          "Page client"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptQuoteInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,64}$"
+            },
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "description": "Secret du lien public du devis"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/quotes/{token}/decline": {
+      "post": {
+        "summary": "Refuser le devis",
+        "tags": [
+          "Page client"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineQuoteInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,64}$"
+            },
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "description": "Secret du lien public du devis"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/quotes/{token}/photos/{photoId}": {
+      "get": {
+        "summary": "Photo partagée avec le client",
+        "tags": [
+          "Page client"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,64}$"
+            },
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "description": "Secret du lien public du devis"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "photoId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/public/quotes/{token}/pixel.gif": {
+      "get": {
+        "summary": "Pixel de suivi de l'e-mail",
+        "tags": [
+          "Page client"
+        ],
+        "description": "Image invisible insérée dans l'e-mail : note « e-mail ouvert » dans l'historique, à titre indicatif (Apple Mail précharge les images). Répond toujours l'image, même pour un lien inconnu.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "token",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
     }
   },
   "tags": [
@@ -3545,6 +4287,10 @@
     {
       "name": "Photos",
       "description": "Photos de chantier jointes au devis"
+    },
+    {
+      "name": "Page client",
+      "description": "Routes publiques du devis envoyé (sans connexion, via le lien secret)"
     },
     {
       "name": "Système"

@@ -623,3 +623,25 @@ select {
   justify-content: center;
   min-height: 120px;
 }
+
+a.secondary {
+  display: inline-block;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.client-link {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.client-link p {
+  margin: 0;
+  word-break: break-all;
+}
+
+.client-link p + p {
+  margin-top: 4px;
+}

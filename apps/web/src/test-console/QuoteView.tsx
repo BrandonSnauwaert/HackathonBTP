@@ -11,6 +11,9 @@ import {
   formatVat,
   parseEuros,
 } from "../format";
+
+const dateTime = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const formatDateTime = (iso: string) => dateTime.format(new Date(iso));
 import { HoldToTalkButton } from "./HoldToTalkButton";
 import { PhotoSection } from "./PhotoSection";
 
@@ -124,7 +127,16 @@ export function QuoteView({ quoteId, onChanged }: { quoteId: string; onChanged: 
             {TRANSITION_LABELS[status] ?? status}
           </button>
         ))}
+        {quote.status === "ready" && (
+          <button className="primary" onClick={() => void run(() => api.sendQuote(quote.id))}>
+            Envoyer le devis
+          </button>
+        )}
+        <a className="secondary" href={`/apercu/${quote.id}`} target="_blank" rel="noreferrer">
+          Aperçu du document ↗
+        </a>
       </div>
+      {quote.publicUrl && <ClientLink quote={quote} />}
       {error && <p className="error-text">{error}</p>}
       {quote.issues.length > 0 && (
         <ul className="issues">
@@ -325,5 +337,42 @@ function ClipItem({ quoteId, clip, onRetry }: { quoteId: string; clip: Clip; onR
       )}
       <audio controls preload="none" src={api.clipAudioUrl(quoteId, clip.id)} />
     </li>
+  );
+}
+
+/** Lien de la page client d'un devis envoyé, avec son suivi (consultation, réponse). */
+function ClientLink({ quote }: { quote: QuoteDetail }) {
+  const [copied, setCopied] = useState(false);
+  const url = quote.publicUrl ?? "";
+
+  return (
+    <div className="client-link">
+      <p>
+        Lien à transmettre au client :{" "}
+        <a href={url} target="_blank" rel="noreferrer">
+          {url}
+        </a>{" "}
+        <button
+          className="link"
+          onClick={() =>
+            void navigator.clipboard.writeText(url).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            })
+          }
+        >
+          {copied ? "Copié" : "Copier"}
+        </button>
+      </p>
+      <p className="muted">
+        {quote.viewedAt
+          ? `Ouvert par le client le ${formatDateTime(quote.viewedAt)}`
+          : "Pas encore ouvert par le client"}
+        {quote.response &&
+          ` · ${quote.response.decision === "accepted" ? "Accepté" : "Refusé"} le ${formatDateTime(quote.response.at)}` +
+            (quote.response.name ? ` par ${quote.response.name}` : "") +
+            (quote.response.message ? ` : « ${quote.response.message} »` : "")}
+      </p>
+    </div>
   );
 }

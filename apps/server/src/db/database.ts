@@ -149,6 +149,13 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX photos_quote_id ON photos(quote_id);
   `,
+  `
+  -- Page publique du devis : première consultation et réponse du client.
+  ALTER TABLE quotes ADD COLUMN viewed_at TEXT;
+  ALTER TABLE quotes ADD COLUMN responded_at TEXT;
+  ALTER TABLE quotes ADD COLUMN response_name TEXT;
+  ALTER TABLE quotes ADD COLUMN response_message TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Database {

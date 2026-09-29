@@ -961,6 +961,157 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Envoyer le devis (il doit être « prêt à envoyer »)
+         * @description Passe le devis en « envoyé » et rend son lien public (`publicUrl`) accessible. Le devis n'est plus modifiable. L'envoi par e-mail viendra s'y ajouter ; en attendant, l'artisan peut partager le lien lui-même.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuoteDetail"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quotes/{id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Aperçu du document client (à tout moment, sans suivi) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuoteDocument"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/quotes/{id}/lines": {
         parameters: {
             query?: never;
@@ -1926,6 +2077,292 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/public/quotes/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ouvrir le devis (page client)
+         * @description La première ouverture fait passer le devis de « envoyé » à « consulté ».
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Secret du lien public du devis */
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuoteDocument"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/quotes/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accepter le devis (bon pour accord) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Secret du lien public du devis */
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AcceptQuoteInput"];
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuoteDocument"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/quotes/{token}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refuser le devis */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Secret du lien public du devis */
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeclineQuoteInput"];
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuoteDocument"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/quotes/{token}/photos/{photoId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Photo partagée avec le client */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Secret du lien public du devis */
+                    token: string;
+                    photoId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/quotes/{token}/pixel.gif": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pixel de suivi de l'e-mail
+         * @description Image invisible insérée dans l'e-mail : note « e-mail ouvert » dans l'historique, à titre indicatif (Apple Mail précharge les images). Répond toujours l'image, même pour un lien inconnu.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2010,6 +2447,16 @@ export interface components {
         PhotoUpdateInput: {
             caption?: string;
             visibleToClient?: boolean;
+        };
+        AcceptQuoteInput: {
+            /** @description Nom et prénom du client : vaut signature */
+            name: string;
+            message?: string;
+        };
+        DeclineQuoteInput: {
+            name?: string;
+            /** @description Motif du refus (facultatif) */
+            message?: string;
         };
         QuoteCreateInput: {
             /**
@@ -2227,6 +2674,74 @@ export interface components {
             /** @description Mention à imprimer si l'entreprise est en franchise de TVA */
             vatMention: string | null;
         };
+        /** @description Réponse du client depuis la page publique */
+        QuoteResponse: {
+            /** @enum {string} */
+            decision: "accepted" | "declined";
+            /** @description Nom saisi par le client (vaut signature pour une acceptation) */
+            name: string;
+            message: string;
+            /** @description Date ISO 8601 */
+            at: string;
+        };
+        /** @description Le devis tel que le client le voit, avec les mentions légales */
+        QuoteDocument: {
+            number: string;
+            title: string;
+            status: components["schemas"]["QuoteStatus"];
+            statusLabel: string;
+            /** @description Date du devis : date d'envoi (ou de création pour un aperçu) */
+            issuedAt: string;
+            /** @description Date ISO 8601 */
+            validUntil: string;
+            validityDays: number;
+            siteAddress: string;
+            startDate: string | null;
+            duration: string;
+            paymentTerms: string;
+            company: {
+                name: string;
+                legalForm: string;
+                address: string;
+                phone: string;
+                email: string;
+                siret: string;
+                vatNumber: string;
+                insurerName: string;
+                insurancePolicyNumber: string;
+                insuranceCoverage: string;
+            };
+            client: {
+                name: string;
+                email: string;
+                phone: string;
+                address: string;
+            };
+            lines: {
+                position: number;
+                description: string;
+                room: string;
+                quantity: number;
+                unitLabel: string;
+                /** @description Prix unitaire HT (centimes) */
+                unitPriceCents: number | null;
+                vatRateBp: number;
+                /** @description Total HT de la ligne (centimes) */
+                totalHtCents: number | null;
+            }[];
+            totals: components["schemas"]["QuoteTotals"];
+            photos: {
+                /** Format: uuid */
+                id: string;
+                caption: string;
+                url: string;
+            }[];
+            response: components["schemas"]["QuoteResponse"] | null;
+            /** @description Afficher les boutons Accepter / Refuser */
+            canRespond: boolean;
+            /** @description Aperçu de l'artisan (aucun suivi, pas de réponse possible) */
+            preview: boolean;
+        };
         QuoteDetail: {
             /** Format: uuid */
             id: string;
@@ -2264,6 +2779,11 @@ export interface components {
             clips: components["schemas"]["Clip"][];
             /** @description Photos de chantier du devis */
             photos: components["schemas"]["Photo"][];
+            /** @description Lien de la page client (null tant que le devis n'est pas envoyé) */
+            publicUrl: string | null;
+            response: components["schemas"]["QuoteResponse"] | null;
+            /** @description Première ouverture de la page par le client */
+            viewedAt: string | null;
             events: components["schemas"]["QuoteEvent"][];
         };
         QuoteSummary: {

@@ -1,4 +1,4 @@
-import type { ApiErrorBody, Clip, Photo, QuoteDetail, QuoteStatus, QuoteSummary, User } from "./types";
+import type { ApiErrorBody, Clip, Photo, QuoteDetail, QuoteDocument, QuoteStatus, QuoteSummary, User } from "./types";
 
 /** Erreur renvoyée par l'API : `code` est stable, `message` est affichable tel quel. */
 export class ApiError extends Error {
@@ -58,6 +58,8 @@ export const api = {
   getQuote: (id: string) => request<QuoteDetail>("GET", `/quotes/${id}`),
   createQuote: (client: { name: string; email?: string }, title: string) =>
     request<QuoteDetail>("POST", "/quotes", { client, title }),
+  sendQuote: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/send`),
+  previewDocument: (id: string) => request<QuoteDocument>("GET", `/quotes/${id}/document`),
   changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
 
   updateLine: (quoteId: string, lineId: string, update: { unitPriceCents?: number | null; vatRateBp?: number }) =>
@@ -81,5 +83,12 @@ export const api = {
     ),
   updatePhoto: (quoteId: string, photoId: string, update: { caption?: string; visibleToClient?: boolean }) =>
     request<Photo>("PATCH", `/quotes/${quoteId}/photos/${photoId}`, update),
+  // Page client (sans connexion, par le secret du lien)
+  openPublicQuote: (token: string) => request<QuoteDocument>("GET", `/public/quotes/${token}`),
+  acceptQuote: (token: string, name: string, message: string) =>
+    request<QuoteDocument>("POST", `/public/quotes/${token}/accept`, message ? { name, message } : { name }),
+  declineQuote: (token: string, message: string) =>
+    request<QuoteDocument>("POST", `/public/quotes/${token}/decline`, message ? { message } : {}),
+
   deletePhoto: (quoteId: string, photoId: string) => request<null>("DELETE", `/quotes/${quoteId}/photos/${photoId}`),
 };

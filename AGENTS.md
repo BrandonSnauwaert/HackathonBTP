@@ -32,6 +32,7 @@ apps/web/               PWA React (Vite, TypeScript) — pour l'instant des page
   src/api/              client de l'API ; schema.d.ts = types générés depuis openapi.json
   src/audio/            micro (AudioWorklet), enregistrement talkie-walkie (useClipRecorder), encodage WAV
   src/images/           réduction des photos sur l'appareil avant l'envoi (1600 px, JPEG)
+  src/public-quote/     page client du devis (/d/<secret>) et aperçu artisan (/apercu/<id>) : document, réponse, impression
   src/test-console/     page de test « Devis & dictées » : connexion, devis, lignes, dictées
   src/live/             page de test « Transcription live » (WebSocket)
 services/kyutai-stt/    image Docker moshi-server + config du modèle STT
@@ -52,6 +53,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Dictées : dépôt d'un clip WAV, file de traitement (Kyutai puis LLM), lignes ajoutées au devis, relance, reprise au redémarrage
 - [x] Client LLM compatible OpenAI et extraction des lignes (JSON validé par zod, seconde tentative si invalide)
 - [x] Photos de chantier : ajout (renvoi sans doublon), légende, visibilité client, suppression ; réduites sur l'appareil
+- [x] Envoi du devis (lien public) et page client : document avec mentions légales, « Accepter » / « Refuser », impression PDF, suivi (consulté, pixel)
+- [ ] Envoi par e-mail (service à choisir, domaine à configurer)
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [ ] Front définitif : liste des devis, écran d'édition (en attente des maquettes UI/UX)
@@ -139,6 +142,13 @@ cd apps/web; npm run dev
 Pour **ajouter une route** : schémas zod dans `src/http/schemas.ts` (avec `.meta({ id })` pour les objets réutilisés, et `.describe()` sur les champs), puis route dans `src/routes/`, avec `tags`, `summary`, `security: cookieAuth` et les réponses d'erreur. La doc se met à jour toute seule.
 
 **Photos** : `POST /api/quotes/:id/photos`, corps image brut (JPEG, PNG ou WebP, avec son `Content-Type`), `clientPhotoId` pour un renvoi sans doublon, `takenAt`, `caption`. Le type est **vérifié sur le contenu du fichier** (pas sur le `Content-Type`). Taille maximale `MAX_PHOTO_MB` (10 Mo). Le front **réduit les photos à 1600 px avant l'envoi** (`apps/web/src/images/resizeImage.ts`). `visibleToClient` vaut `false` par défaut : la photo est une note interne tant que l'artisan ne la partage pas. Fichiers dans `PHOTOS_DIR`, supprimés avec la photo ou avec le devis.
+
+**Envoi et page client** :
+- `POST /api/quotes/:id/send` : un devis `ready` passe en `sent` (figé) et reçoit son lien public `publicUrl` = `PUBLIC_BASE_URL/d/<secret>`. L'e-mail viendra se brancher dans cette action.
+- Routes publiques **sans connexion** sous `/api/public/quotes/:token` : ouverture, `accept` (nom obligatoire, vaut signature), `decline`, photos partagées, `pixel.gif`. Un devis non envoyé n'y est jamais accessible (404).
+- Le document public (`QuoteDocument`) ne contient **rien d'interne** : ni notes, ni dictées, ni points à compléter, ni photos non partagées. Un test le vérifie.
+- **« Consulté » = ouverture de la page par le client.** Le pixel de l'e-mail ne fait qu'ajouter un événement `email_opened` à l'historique, car Apple Mail précharge les images.
+- Front : `/d/<secret>` (client) et `/apercu/<id>` (artisan, sans suivi) affichent le même composant (`apps/web/src/public-quote/`). L'impression (A4) masque les boutons et garde le bloc « Bon pour accord ».
 
 **Interface de transcription**, dans `apps/server/src/transcription/transcriber.ts`. Tout fournisseur la respecte, et il est choisi par la variable `TRANSCRIBER` :
 ```ts

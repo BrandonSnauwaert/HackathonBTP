@@ -13,6 +13,8 @@ const EnvSchema = z
     /** true derrière HTTPS (tunnel de démo) : le cookie de session n'est alors envoyé qu'en HTTPS. */
     COOKIE_SECURE: booleanFromEnv.default(false),
     FOLLOW_UP_AFTER_DAYS: z.coerce.number().int().positive().default(7),
+    /** Adresse du front vue par les clients (lien des devis envoyés). Derrière le tunnel : https://... */
+    PUBLIC_BASE_URL: z.string().url().default("http://localhost:5173"),
 
     // Dictées
     CLIPS_DIR: z.string().default("data/clips"),

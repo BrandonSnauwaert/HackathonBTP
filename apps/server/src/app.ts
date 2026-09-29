@@ -21,6 +21,7 @@ import type { LineExtractor } from "./llm/line-extractor.js";
 import { authRoutes } from "./routes/auth.js";
 import { clipRoutes } from "./routes/clips.js";
 import { photoRoutes } from "./routes/photos.js";
+import { publicRoutes } from "./routes/public.js";
 import { clientRoutes } from "./routes/clients.js";
 import { companyRoutes } from "./routes/company.js";
 import { quoteRoutes } from "./routes/quotes.js";
@@ -89,6 +90,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
           description: "Clips audio talkie-walkie : transcription puis extraction des lignes par le LLM",
         },
         { name: "Photos", description: "Photos de chantier jointes au devis" },
+        { name: "Page client", description: "Routes publiques du devis envoyé (sans connexion, via le lien secret)" },
         { name: "Système" },
       ],
       components: {
@@ -126,6 +128,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
     followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
     clipsDir: config.CLIPS_DIR,
     photosDir: config.PHOTOS_DIR,
+    publicBaseUrl: config.PUBLIC_BASE_URL,
   });
   const clips = createClipService({
     db,
@@ -152,6 +155,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
   const maxPhotoBytes = Math.round(config.MAX_PHOTO_MB * 1024 * 1024);
   const photos = createPhotoService({ db, quotes, photosDir: config.PHOTOS_DIR, maxPhotoBytes });
   await app.register(photoRoutes, { prefix: "/api/quotes", photos, maxPhotoBytes });
+  await app.register(publicRoutes, { prefix: "/api/public/quotes", quotes });
   await app.register(transcriptionRoutes, { config });
 
   return app;

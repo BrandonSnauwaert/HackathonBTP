@@ -188,6 +188,75 @@ export const QuoteTotalsSchema = z
   })
   .meta({ id: "QuoteTotals" });
 
+export const QuoteResponseSchema = z
+  .object({
+    decision: z.enum(["accepted", "declined"]),
+    name: z.string().describe("Nom saisi par le client (vaut signature pour une acceptation)"),
+    message: z.string(),
+    at: isoDate,
+  })
+  .meta({ id: "QuoteResponse", description: "Réponse du client depuis la page publique" });
+
+export const QuoteDocumentSchema = z
+  .object({
+    number: z.string(),
+    title: z.string(),
+    status: QuoteStatusSchema,
+    statusLabel: z.string(),
+    issuedAt: isoDate.describe("Date du devis : date d'envoi (ou de création pour un aperçu)"),
+    validUntil: isoDate,
+    validityDays: z.number().int(),
+    siteAddress: z.string(),
+    startDate: z.string().nullable(),
+    duration: z.string(),
+    paymentTerms: z.string(),
+    company: z.object({
+      name: z.string(),
+      legalForm: z.string(),
+      address: z.string(),
+      phone: z.string(),
+      email: z.string(),
+      siret: z.string(),
+      vatNumber: z.string(),
+      insurerName: z.string(),
+      insurancePolicyNumber: z.string(),
+      insuranceCoverage: z.string(),
+    }),
+    client: z.object({ name: z.string(), email: z.string(), phone: z.string(), address: z.string() }),
+    lines: z.array(
+      z.object({
+        position: z.number().int(),
+        description: z.string(),
+        room: z.string(),
+        quantity: z.number(),
+        unitLabel: z.string(),
+        unitPriceCents: cents("Prix unitaire HT").nullable(),
+        vatRateBp: z.number().int(),
+        totalHtCents: cents("Total HT de la ligne").nullable(),
+      }),
+    ),
+    totals: QuoteTotalsSchema,
+    photos: z.array(z.object({ id: z.uuid(), caption: z.string(), url: z.string() })),
+    response: QuoteResponseSchema.nullable(),
+    canRespond: z.boolean().describe("Afficher les boutons Accepter / Refuser"),
+    preview: z.boolean().describe("Aperçu de l'artisan (aucun suivi, pas de réponse possible)"),
+  })
+  .meta({ id: "QuoteDocument", description: "Le devis tel que le client le voit, avec les mentions légales" });
+
+export const AcceptQuoteSchema = z
+  .object({
+    name: z.string().trim().min(2).max(100).describe("Nom et prénom du client : vaut signature"),
+    message: z.string().max(1000).optional(),
+  })
+  .meta({ id: "AcceptQuote" });
+
+export const DeclineQuoteSchema = z
+  .object({
+    name: z.string().trim().max(100).optional(),
+    message: z.string().max(1000).optional().describe("Motif du refus (facultatif)"),
+  })
+  .meta({ id: "DeclineQuote" });
+
 export const QuoteDetailSchema = z
   .object({
     id: z.uuid(),
@@ -212,6 +281,9 @@ export const QuoteDetailSchema = z
     allowedTransitions: z.array(QuoteStatusSchema).describe("Statuts que l'artisan peut poser via POST /status"),
     clips: z.array(ClipSchema).describe("Dictées du devis et leur état de traitement"),
     photos: z.array(PhotoSchema).describe("Photos de chantier du devis"),
+    publicUrl: z.string().nullable().describe("Lien de la page client (null tant que le devis n'est pas envoyé)"),
+    response: QuoteResponseSchema.nullable(),
+    viewedAt: isoDate.nullable().describe("Première ouverture de la page par le client"),
     events: z.array(QuoteEventSchema),
   })
   .meta({ id: "QuoteDetail" });

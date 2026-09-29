@@ -29,6 +29,7 @@ const quotes = createQuoteService(db, {
   followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
   clipsDir: config.CLIPS_DIR,
   photosDir: config.PHOTOS_DIR,
+  publicBaseUrl: config.PUBLIC_BASE_URL,
 });
 
 const existing = findUserByEmail(db, DEMO_EMAIL);

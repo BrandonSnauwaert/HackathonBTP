@@ -18,8 +18,15 @@ export interface Quote {
   duration: string;
   paymentTerms: string;
   notes: string;
+  /** Secret du lien public du devis (page client). */
   publicToken: string;
   sentAt: string | null;
+  /** Première ouverture de la page publique par le client. */
+  viewedAt: string | null;
+  /** Réponse du client (acceptation ou refus) : date, nom saisi, message éventuel. */
+  respondedAt: string | null;
+  responseName: string | null;
+  responseMessage: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +73,10 @@ const QuoteRow = z
     notes: z.string(),
     public_token: z.string(),
     sent_at: z.string().nullable(),
+    viewed_at: z.string().nullable(),
+    responded_at: z.string().nullable(),
+    response_name: z.string().nullable(),
+    response_message: z.string().nullable(),
     created_at: z.string(),
     updated_at: z.string(),
   })
@@ -83,6 +94,10 @@ const QuoteRow = z
     notes: r.notes,
     publicToken: r.public_token,
     sentAt: r.sent_at,
+    viewedAt: r.viewed_at,
+    respondedAt: r.responded_at,
+    responseName: r.response_name,
+    responseMessage: r.response_message,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
@@ -170,7 +185,21 @@ export function nextQuoteNumber(db: Database, userId: string, year: number): str
   return `${prefix}${String((row?.max ?? 0) + 1).padStart(4, "0")}`;
 }
 
-export type NewQuote = Omit<Quote, "createdAt" | "updatedAt" | "sentAt">;
+export type NewQuote = Omit<
+  Quote,
+  "createdAt" | "updatedAt" | "sentAt" | "viewedAt" | "respondedAt" | "responseName" | "responseMessage"
+>;
+
+/** Devis retrouvé par le secret de son lien public, avec son propriétaire. */
+export function findQuoteByPublicToken(db: Database, token: string): { quote: Quote; userId: string } | undefined {
+  const row = queryOne(
+    db,
+    z.object({ id: z.string(), user_id: z.string() }),
+    "SELECT id, user_id FROM quotes WHERE public_token = :token",
+    { token },
+  );
+  return row && { quote: getQuote(db, row.user_id, row.id), userId: row.user_id };
+}
 
 export function insertQuote(db: Database, userId: string, quote: NewQuote): void {
   const now = new Date().toISOString();
@@ -197,6 +226,10 @@ export type QuoteUpdate = PatchOf<
     | "paymentTerms"
     | "notes"
     | "sentAt"
+    | "viewedAt"
+    | "respondedAt"
+    | "responseName"
+    | "responseMessage"
   >
 >;
 
@@ -212,6 +245,10 @@ export function updateQuote(db: Database, id: string, update: QuoteUpdate): void
     payment_terms: update.paymentTerms,
     notes: update.notes,
     sent_at: update.sentAt,
+    viewed_at: update.viewedAt,
+    responded_at: update.respondedAt,
+    response_name: update.responseName,
+    response_message: update.responseMessage,
     updated_at: new Date().toISOString(),
   });
   execute(db, `UPDATE quotes SET ${set.sql} WHERE id = :id`, { ...set.params, id });

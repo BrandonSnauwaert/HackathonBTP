@@ -117,3 +117,22 @@ GET {{base}}/quotes/{{quoteId}}/photos/{{photoId}}/file
 
 ### Supprimer la photo
 DELETE {{base}}/quotes/{{quoteId}}/photos/{{photoId}}
+
+### --- Envoi et page client ---
+
+### Aperçu du document client (à tout moment)
+GET {{base}}/quotes/{{quoteId}}/document
+
+### Envoyer le devis (il doit être « prêt ») : renvoie publicUrl, le lien à transmettre au client
+POST {{base}}/quotes/{{quoteId}}/send
+
+> {% client.global.set("publicToken", response.body.publicUrl.split("/d/")[1]); %}
+
+### Page client : ouverture (passe le devis en « consulté »)
+GET {{base}}/public/quotes/{{publicToken}}
+
+### Page client : accepter (le nom vaut signature)
+POST {{base}}/public/quotes/{{publicToken}}/accept
+Content-Type: application/json
+
+{ "name": "Claire Petit", "message": "Parfait, à bientôt" }
