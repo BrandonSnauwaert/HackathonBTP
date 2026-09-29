@@ -1,0 +1,22 @@
+services:
+  kyutai-stt:
+    build:
+      context: ./services/kyutai-stt
+      args:
+        # 75 = GTX 16xx / RTX 20xx, 86 = RTX 30xx, 89 = RTX 40xx
+        CUDA_COMPUTE_CAP: "75"
+    ports:
+      - "8080:8080"
+    volumes:
+      # Cache du modèle Hugging Face, pour ne pas le retélécharger à chaque démarrage.
+      - hf-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:

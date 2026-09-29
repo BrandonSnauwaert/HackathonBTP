@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.idea/
+.vscode/
+.DS_Store
+*.tsbuildinfo
+*.sqlite
+*.db
