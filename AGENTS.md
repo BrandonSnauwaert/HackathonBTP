@@ -15,12 +15,13 @@ apps/server/            API Node.js (Fastify, TypeScript)
   src/db/database.ts    SQLite : migrations, transactions, helpers de requête validés par zod
   src/domain/           logique métier pure et testée : statuts, calculs HT/TVA/TTC, unités
   src/repositories/     accès aux données (SQL), une table par fichier ou presque
-  src/services/         règles métier qui combinent plusieurs dépôts (quote-service.ts)
+  src/services/         règles métier : devis (quote-service.ts), dictées et file de traitement (clip-service.ts)
   src/http/             schémas zod de l'API, erreurs HTTP, nettoyage de la doc OpenAPI
   src/routes/           routes Fastify, une par ressource (auth, company, clients, quotes, transcription)
   src/auth/             mots de passe (scrypt) et session par cookie
-  src/*transcriber*.ts  transcription : interface commune, mock, Kyutai
-  src/audio-format.ts   format audio attendu (PCM s16le mono 24 kHz)
+  src/transcription/    interface Transcriber, mock, Kyutai, transcription d'un clip complet
+  src/llm/              interface LlmClient, client compatible OpenAI, extraction des lignes de devis (prompt)
+  src/audio/            format audio interne (PCM s16le mono 24 kHz), lecture / écriture WAV
   scripts/              seed de démo, clients de test (WebSocket, navigateur headless)
   samples/              audio de test (chantier-fr.wav)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
@@ -41,8 +42,9 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] SQLite : artisans, profil entreprise, clients, devis, lignes, historique
 - [x] Authentification (e-mail + mot de passe, session par cookie) et compte de démo pré-rempli (`npm run seed:demo`)
 - [x] API REST des devis : CRUD, lignes, statuts, calcul HT / TVA / TTC, points manquants, doc OpenAPI sur `/docs`
-- [ ] Table des clips audio et route d'envoi d'un clip (`POST /api/quotes/:id/clips`)
-- [ ] Extraction des lignes de devis par le LLM (sortie JSON validée par zod)
+- [x] Dictées : dépôt d'un clip WAV, file de traitement (Kyutai puis LLM), lignes ajoutées au devis, relance, reprise au redémarrage
+- [x] Client LLM compatible OpenAI et extraction des lignes (JSON validé par zod, seconde tentative si invalide)
+- [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [ ] Front : liste des devis, écran d'édition (en attente des maquettes UI/UX)
 - [ ] Page publique du devis (lien secret) avec « Accepter » et « Refuser », suivi de consultation, pixel
 - [ ] Envoi de l'e-mail (service à choisir) et tunnel HTTPS vers le PC de démo
@@ -82,7 +84,7 @@ Une tâche n'est **pas terminée** tant que ces vérifications ne passent pas :
 
 | Commande | Où | Rôle |
 |---|---|---|
-| `npm run typecheck` | apps/server | types du serveur |
+| `npm run typecheck` | apps/server | types du serveur et des scripts |
 | `npm test` | apps/server | tests unitaires (domaine) et d'intégration (API sur SQLite en mémoire) |
 | `npm run build` | apps/web | types et build du front |
 | `npm run test:ws -- samples/chantier-fr.wav` | apps/server | streame le WAV au serveur lancé, affiche les transcriptions |
@@ -103,15 +105,23 @@ Une tâche n'est **pas terminée** tant que ces vérifications ne passent pas :
 
 Pour **ajouter une route** : schémas zod dans `src/http/schemas.ts` (avec `.meta({ id })` pour les objets réutilisés, et `.describe()` sur les champs), puis route dans `src/routes/`, avec `tags`, `summary`, `security: cookieAuth` et les réponses d'erreur. La doc se met à jour toute seule.
 
-**Interface de transcription**, dans `apps/server/src/transcriber.ts`. Tout fournisseur la respecte, et il est choisi par la variable `TRANSCRIBER` :
+**Interface de transcription**, dans `apps/server/src/transcription/transcriber.ts`. Tout fournisseur la respecte, et il est choisi par la variable `TRANSCRIBER` :
 ```ts
 interface TranscriptEvent { text: string; isFinal: boolean }
 interface Transcriber {
   sendAudio(chunk: Buffer): void;
   onTranscript(cb: (e: TranscriptEvent) => void): void;
+  flush(): Promise<void>;   // fin de l'audio : se résout quand tout est transcrit (clips)
   close(): void;
 }
 ```
+
+**LLM**, dans `apps/server/src/llm/`. Deux niveaux :
+- `LlmClient.complete(messages, { json? })` : appel générique. Une seule implémentation, `openai-client.ts`, qui parle à **toute API compatible OpenAI** (`/v1/chat/completions` : OpenAI, Mistral, Groq, OpenRouter, Ollama, vLLM…) via le SDK `openai` et `baseURL`.
+- `LineExtractor.extract({ transcript, existingLines })` renvoie `{ lines, warnings }`. Le prompt est dans `line-extractor.ts` (`SYSTEM_PROMPT`). La réponse est validée par zod avec une normalisation tolérante des unités et de la TVA, et redemandée une fois si elle est invalide. **Jamais de prix** dans la sortie.
+- Configuration : `LLM_PROVIDER` (`mock` = extraction par mots-clés sans LLM, `openai`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_TIMEOUT_MS`, `LLM_JSON_MODE` (`json_object` par défaut ; `json_schema` si le serveur le gère ; `none` si le serveur refuse `response_format`).
+
+**Dictées** : `POST /api/quotes/:id/clips`, corps WAV brut (`Content-Type: audio/wav`), avec `clientClipId` (UUID généré par le téléphone, qui rend le renvoi sans risque) et `recordedAt`. Traitement en tâche de fond, **un clip à la fois** : `pending → transcribing → extracting → done | failed`. Le front suit l'avancement via le champ `clips` de `GET /api/quotes/:id`. Une transcription réussie est conservée : une relance ne refait que l'appel au LLM.
 
 **Format audio** du client vers le serveur : PCM **s16le, mono, 24 kHz**, envoyé en messages binaires. Le rééchantillonnage se fait dans l'AudioWorklet du front.
 
@@ -159,6 +169,7 @@ interface Transcriber {
 - **`node:sqlite`** affiche un avertissement « ExperimentalWarning » au démarrage : c'est normal.
 - **Doc OpenAPI** : les identifiants de schéma (`.meta({ id })`) ne doivent pas finir par `Input`, car la librairie ajoute ce suffixe aux versions « entrée » et deux noms entreraient en collision (erreur 500 sur `/docs`).
 - `exactOptionalPropertyTypes` est activé : pour typer des champs optionnels venant de zod, utiliser `PatchOf<T>` (`src/types.ts`) plutôt que `Partial<T>`.
+- **Vitesse de Kyutai sur la GTX 1660** : ~1,15× le temps réel. Une dictée de 10 s met ~9 s à être transcrite, auxquelles s'ajoute l'appel au LLM.
 - `batch_size = 2` dans la config Kyutai : 2 flux de transcription simultanés au maximum.
 - **Micro dans le navigateur :** exige HTTPS, sauf sur `localhost`. Pour tester depuis un téléphone, passer par le tunnel HTTPS.
 - **Kyutai ne produit du texte que si on lui envoie de l'audio.** Un clip doit être suivi d'environ 1 s de silence pour que les derniers mots sortent.

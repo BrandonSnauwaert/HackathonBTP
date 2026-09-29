@@ -9,6 +9,8 @@
  */
 export const INPUT_SAMPLE_RATE = 24_000;
 export const BYTES_PER_SAMPLE = 2;
+/** Trame de 80 ms : unité de traitement de Kyutai, et taille des blocs envoyés par le front. */
+export const FRAME_SAMPLES = 1920;
 
 /** Convertit du PCM s16le en échantillons flottants dans [-1, 1]. */
 export function pcm16ToFloat32(chunk: Buffer): Float32Array {

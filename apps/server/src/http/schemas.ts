@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { QUOTE_STATUSES } from "../domain/quote-status.js";
+import { CLIP_STATUSES } from "../repositories/clips.js";
 import { VAT_RATES_BP } from "../domain/quote-totals.js";
 import { UNITS } from "../domain/units.js";
 
@@ -102,6 +103,7 @@ export const QuoteLineSchema = z
     vatRateBp: z.number().int(),
     totalHtCents: cents("Total HT de la ligne").nullable(),
     source: z.enum(["manual", "dictation"]).describe("Ligne saisie à la main ou issue d'une dictée"),
+    clipId: z.uuid().nullable().describe("Dictée dont la ligne est issue"),
     createdAt: isoDate,
     updatedAt: isoDate,
   })
@@ -132,6 +134,23 @@ export const QuoteEventSchema = z
     createdAt: isoDate,
   })
   .meta({ id: "QuoteEvent" });
+
+export const ClipSchema = z
+  .object({
+    id: z.uuid(),
+    clientClipId: z.string().nullable().describe("Identifiant généré par le téléphone"),
+    status: z.enum(CLIP_STATUSES).describe("pending → transcribing → extracting → done, ou failed"),
+    statusLabel: z.string(),
+    durationMs: z.number().int(),
+    transcript: z.string().nullable().describe("Texte transcrit (null tant que la transcription n'est pas faite)"),
+    warnings: z.array(z.string()).describe("Informations manquantes relevées par l'analyse (quantités, dimensions...)"),
+    error: z.string().nullable().describe("Cause de l'échec, si status = failed"),
+    lineCount: z.number().int().describe("Nombre de lignes ajoutées au devis par cette dictée"),
+    recordedAt: isoDate,
+    createdAt: isoDate,
+    updatedAt: isoDate,
+  })
+  .meta({ id: "Clip" });
 
 export const QuoteTotalsSchema = z
   .object({
@@ -169,6 +188,7 @@ export const QuoteDetailSchema = z
     totals: QuoteTotalsSchema,
     issues: z.array(z.string()).describe("Ce qui manque pour passer le devis en « prêt » (vide = complet)"),
     allowedTransitions: z.array(QuoteStatusSchema).describe("Statuts que l'artisan peut poser via POST /status"),
+    clips: z.array(ClipSchema).describe("Dictées du devis et leur état de traitement"),
     events: z.array(QuoteEventSchema),
   })
   .meta({ id: "QuoteDetail" });

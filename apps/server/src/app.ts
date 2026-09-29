@@ -16,20 +16,27 @@ import type { Config } from "./config.js";
 import type { Database } from "./db/database.js";
 import { HttpError } from "./http/errors.js";
 import { transformObject } from "./http/openapi.js";
+import { createLineExtractor } from "./llm/create-line-extractor.js";
+import type { LineExtractor } from "./llm/line-extractor.js";
 import { authRoutes } from "./routes/auth.js";
+import { clipRoutes } from "./routes/clips.js";
 import { clientRoutes } from "./routes/clients.js";
 import { companyRoutes } from "./routes/company.js";
 import { quoteRoutes } from "./routes/quotes.js";
 import { transcriptionRoutes } from "./routes/transcription.js";
+import { createClipService } from "./services/clip-service.js";
 import { createQuoteService } from "./services/quote-service.js";
+import { createTranscriber } from "./transcription/create-transcriber.js";
 
 export interface AppOptions {
   config: Config;
   db: Database;
   logger?: boolean;
+  /** Remplace l'extracteur choisi par LLM_PROVIDER (tests). */
+  extractor?: LineExtractor;
 }
 
-export async function buildApp({ config, db, logger = true }: AppOptions): Promise<FastifyInstance> {
+export async function buildApp({ config, db, logger = true, extractor }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -73,6 +80,7 @@ export async function buildApp({ config, db, logger = true }: AppOptions): Promi
         { name: "Clients" },
         { name: "Devis", description: "Cycle de vie : brouillon → prêt → envoyé → consulté → accepté / refusé" },
         { name: "Lignes de devis" },
+        { name: "Dictées", description: "Clips audio talkie-walkie : transcription puis extraction des lignes par le LLM" },
         { name: "Système" },
       ],
       components: {
@@ -94,13 +102,29 @@ export async function buildApp({ config, db, logger = true }: AppOptions): Promi
       schema: {
         tags: ["Système"],
         summary: "État du serveur",
-        response: { 200: z.object({ status: z.literal("ok"), transcriber: z.string() }) },
+        response: {
+          200: z.object({ status: z.literal("ok"), transcriber: z.string(), llm: z.string() }),
+        },
       },
     },
-    async () => ({ status: "ok" as const, transcriber: config.TRANSCRIBER }),
+    async () => ({
+      status: "ok" as const,
+      transcriber: config.TRANSCRIBER,
+      llm: config.LLM_PROVIDER === "mock" ? "mock" : config.LLM_MODEL,
+    }),
   );
 
-  const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS });
+  const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS, clipsDir: config.CLIPS_DIR });
+  const clips = createClipService({
+    db,
+    quotes,
+    clipsDir: config.CLIPS_DIR,
+    maxClipSeconds: config.MAX_CLIP_SECONDS,
+    createTranscriber: () => createTranscriber(config, app.log),
+    extractor: extractor ?? createLineExtractor(config),
+    logger: app.log,
+  });
+  app.addHook("onReady", async () => clips.resume());
   await app.register(authRoutes, {
     prefix: "/api/auth",
     db,
@@ -110,6 +134,9 @@ export async function buildApp({ config, db, logger = true }: AppOptions): Promi
   await app.register(companyRoutes, { prefix: "/api/company", db });
   await app.register(clientRoutes, { prefix: "/api/clients", db });
   await app.register(quoteRoutes, { prefix: "/api/quotes", quotes });
+  // WAV PCM 16 bits 24 kHz ≈ 2,9 Mo par minute, plus de la marge pour les fréquences plus élevées.
+  const maxUploadBytes = Math.ceil(config.MAX_CLIP_SECONDS / 60) * 12 * 1024 * 1024;
+  await app.register(clipRoutes, { prefix: "/api/quotes", clips, maxUploadBytes });
   await app.register(transcriptionRoutes, { config });
 
   return app;

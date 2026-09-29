@@ -35,6 +35,15 @@ export class MockTranscriber implements Transcriber {
     this.callbacks.push(callback);
   }
 
+  /** Émet immédiatement une phrase définitive (si de l'audio a été reçu). */
+  async flush(): Promise<void> {
+    if (this.closed || this.timer === null) return;
+    const text = PHRASES[this.phraseIndex % PHRASES.length] ?? "";
+    this.phraseIndex++;
+    this.nextIsFinal = false;
+    for (const callback of this.callbacks) callback({ text, isFinal: true });
+  }
+
   close(): void {
     this.closed = true;
     if (this.timer !== null) {

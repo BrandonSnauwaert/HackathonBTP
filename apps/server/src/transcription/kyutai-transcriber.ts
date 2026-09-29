@@ -1,7 +1,7 @@
 import { decode, encode } from "@msgpack/msgpack";
 import WebSocket, { type RawData } from "ws";
 import { z } from "zod";
-import { BYTES_PER_SAMPLE, INPUT_SAMPLE_RATE, pcm16ToFloat32 } from "./audio-format.js";
+import { FRAME_SAMPLES, pcm16ToFloat32 } from "../audio/audio-format.js";
 import type { Transcriber, TranscriptEvent } from "./transcriber.js";
 
 /**
@@ -50,8 +50,17 @@ const SENTENCE_END = /[.?!…]["»)]?$/;
  */
 const TEXT_DELAY_STEPS = 8;
 
-/** Audio mis en attente tant que la connexion à Kyutai n'est pas ouverte (10 s max). */
-const MAX_PENDING_BYTES = 10 * INPUT_SAMPLE_RATE * BYTES_PER_SAMPLE;
+/**
+ * Messages mis en attente tant que la connexion à Kyutai n'est pas ouverte.
+ * Large, car un clip entier peut être envoyé d'un coup (≈ 5 octets par échantillon en msgpack).
+ */
+const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
+
+/** Silence envoyé après un marqueur pour faire avancer le modèle jusqu'à lui (trame de 80 ms). */
+const SILENCE_FRAME: readonly number[] = new Array<number>(FRAME_SAMPLES).fill(0);
+/** Cadence d'envoi du silence : 80 ms d'audio toutes les 20 ms, soit 4× le temps réel. */
+const SILENCE_INTERVAL_MS = 20;
+const FLUSH_TIMEOUT_MS = 60_000;
 
 /**
  * Transcriber branché sur moshi-server (Kyutai STT).
@@ -65,8 +74,11 @@ const MAX_PENDING_BYTES = 10 * INPUT_SAMPLE_RATE * BYTES_PER_SAMPLE;
 export class KyutaiTranscriber implements Transcriber {
   private readonly ws: WebSocket;
   private readonly callbacks: Array<(event: TranscriptEvent) => void> = [];
-  private pending: Buffer[] = [];
-  private pendingBytes = 0;
+  private queue: Uint8Array[] = [];
+  private queuedBytes = 0;
+  private lastMarkerId = 0;
+  /** flush() en attente, par identifiant de marqueur. */
+  private readonly markerWaiters = new Map<number, { resolve: () => void; reject: (err: Error) => void }>();
   private words: string[] = [];
   /** Step à partir duquel clore la phrase en cours, après une pause détectée. */
   private flushAtStep: number | null = null;
@@ -77,34 +89,65 @@ export class KyutaiTranscriber implements Transcriber {
 
     this.ws.on("open", () => {
       options.logger.info({ url: options.url }, "connecté à Kyutai STT");
-      for (const chunk of this.pending) this.forward(chunk);
-      this.pending = [];
-      this.pendingBytes = 0;
+      for (const message of this.queue) this.ws.send(message);
+      this.queue = [];
+      this.queuedBytes = 0;
     });
 
     this.ws.on("message", (data: RawData) => this.handleMessage(data));
 
     this.ws.on("error", (err) => {
       options.logger.error({ err, url: options.url }, "erreur de connexion à Kyutai STT");
+      this.rejectWaiters(new Error("Service de transcription Kyutai injoignable"));
     });
 
     this.ws.on("close", (code, reason) => {
       if (!this.closed) {
         options.logger.warn({ code, reason: reason.toString() }, "connexion Kyutai STT fermée");
       }
+      this.rejectWaiters(new Error("Connexion au service de transcription Kyutai fermée"));
     });
   }
 
   sendAudio(chunk: Buffer): void {
     if (this.closed || chunk.length === 0) return;
+    this.send({ type: "Audio", pcm: Array.from(pcm16ToFloat32(chunk)) });
+  }
 
-    if (this.ws.readyState === WebSocket.OPEN) {
-      this.forward(chunk);
-    } else if (this.ws.readyState === WebSocket.CONNECTING) {
-      if (this.pendingBytes + chunk.length > MAX_PENDING_BYTES) return;
-      this.pending.push(chunk);
-      this.pendingBytes += chunk.length;
-    }
+  /**
+   * Envoie un marqueur puis du silence jusqu'à ce que Kyutai renvoie ce marqueur :
+   * tout l'audio envoyé avant a alors été transcrit (délai du modèle compris).
+   */
+  flush(): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    const id = ++this.lastMarkerId;
+
+    return new Promise<void>((resolve, reject) => {
+      const silence = setInterval(() => this.send({ type: "Audio", pcm: SILENCE_FRAME }), SILENCE_INTERVAL_MS);
+      const timeout = setTimeout(() => {
+        this.markerWaiters.delete(id);
+        clearInterval(silence);
+        reject(new Error("Transcription Kyutai : délai dépassé"));
+      }, FLUSH_TIMEOUT_MS);
+      const done = () => {
+        clearInterval(silence);
+        clearTimeout(timeout);
+        this.markerWaiters.delete(id);
+      };
+
+      this.markerWaiters.set(id, {
+        resolve: () => {
+          done();
+          this.flushSentence();
+          resolve();
+        },
+        reject: (err) => {
+          done();
+          reject(err);
+        },
+      });
+      this.send({ type: "Marker", id });
+    });
   }
 
   onTranscript(callback: (event: TranscriptEvent) => void): void {
@@ -116,7 +159,8 @@ export class KyutaiTranscriber implements Transcriber {
     this.flushSentence();
     this.closed = true;
     this.callbacks.length = 0;
-    this.pending = [];
+    this.queue = [];
+    this.rejectWaiters(new Error("Transcription interrompue"));
     if (this.ws.readyState === WebSocket.CONNECTING) {
       this.ws.terminate();
     } else if (this.ws.readyState === WebSocket.OPEN) {
@@ -124,9 +168,19 @@ export class KyutaiTranscriber implements Transcriber {
     }
   }
 
-  private forward(chunk: Buffer): void {
-    const pcm = pcm16ToFloat32(chunk);
-    this.ws.send(encode({ type: "Audio", pcm: Array.from(pcm) }, { forceFloat32: true }));
+  /** Envoie un message msgpack, ou le met en attente pendant la connexion. */
+  private send(message: { type: "Audio"; pcm: readonly number[] } | { type: "Marker"; id: number }): void {
+    const data = encode(message, { forceFloat32: true });
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(data);
+    } else if (this.ws.readyState === WebSocket.CONNECTING && this.queuedBytes + data.length <= MAX_QUEUED_BYTES) {
+      this.queue.push(data);
+      this.queuedBytes += data.length;
+    }
+  }
+
+  private rejectWaiters(err: Error): void {
+    for (const waiter of [...this.markerWaiters.values()]) waiter.reject(err);
   }
 
   private handleMessage(data: RawData): void {
@@ -163,8 +217,10 @@ export class KyutaiTranscriber implements Transcriber {
       case "Error":
         this.options.logger.error({ message: message.message }, "erreur renvoyée par Kyutai STT");
         break;
-      case "EndWord":
       case "Marker":
+        this.markerWaiters.get(message.id)?.resolve();
+        break;
+      case "EndWord":
       case "Ready":
         break;
     }

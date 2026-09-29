@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { transaction, type Database } from "../db/database.js";
 import {
   STATUS_LABELS,
@@ -12,15 +14,19 @@ import {
 import { VAT_EXEMPT_MENTION, computeQuoteTotals, type QuoteTotals } from "../domain/quote-totals.js";
 import { UNIT_LABELS } from "../domain/units.js";
 import { HttpError, conflict } from "../http/errors.js";
+import { countLinesByClip, listClips, toClipView, type ClipView } from "../repositories/clips.js";
 import { createClient, getClient, type Client, type ClientInput } from "../repositories/clients.js";
 import { companyIssues, getCompany } from "../repositories/companies.js";
 import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
+import type { ExtractedLine } from "../llm/line-extractor.js";
 import type { PatchOf } from "../types.js";
 
 export interface QuoteServiceOptions {
   /** Délai sans réponse après l'envoi avant de passer « à relancer ». */
   followUpAfterDays: number;
+  /** Dossier des fichiers audio des dictées (supprimés avec le devis). */
+  clipsDir: string;
 }
 
 export type QuoteLineView = QuoteLine & { unitLabel: string; totalHtCents: number | null };
@@ -46,6 +52,7 @@ export interface QuoteDetail {
   totals: Omit<QuoteTotals, "lineTotalsHtCents"> & { vatExempt: boolean; vatMention: string | null };
   issues: string[];
   allowedTransitions: QuoteStatus[];
+  clips: ClipView[];
   events: QuoteEvent[];
 }
 
@@ -122,6 +129,11 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     return issues;
   }
 
+  function listClipViews(quoteId: string): ClipView[] {
+    const lineCounts = countLinesByClip(db, quoteId);
+    return listClips(db, quoteId).map((clip) => toClipView(clip, lineCounts.get(clip.id) ?? 0));
+  }
+
   function detail(userId: string, quoteId: string): QuoteDetail {
     const quote = refresh(repo.getQuote(db, userId, quoteId));
     const client = getClient(db, userId, quote.clientId);
@@ -156,6 +168,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       totals: { ...totals, vatExempt: company.vatExempt, vatMention: company.vatExempt ? VAT_EXEMPT_MENTION : null },
       issues: isEditable(quote.status) ? readinessIssues(userId, client, lines) : [],
       allowedTransitions: allowedTransitions(quote.status, "artisan").filter((s) => MANUAL_STATUSES.includes(s)),
+      clips: listClipViews(quote.id),
       events: repo.listEvents(db, quote.id),
     };
   }
@@ -232,9 +245,26 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       return detail(userId, quoteId);
     },
 
-    remove(userId: string, quoteId: string): void {
+    async remove(userId: string, quoteId: string): Promise<void> {
       const quote = loadEditable(userId, quoteId);
+      const audioFiles = listClips(db, quote.id).map((c) => c.audioFile);
       repo.deleteQuote(db, quote.id);
+      await Promise.all(audioFiles.map((file) => rm(join(options.clipsDir, file), { force: true })));
+    },
+
+    /** Vérifie qu'on peut encore ajouter une dictée à ce devis (brouillon ou prêt). */
+    assertEditable(userId: string, quoteId: string): void {
+      loadEditable(userId, quoteId);
+    },
+
+    /** Ajoute les lignes extraites d'une dictée, en fin de devis. */
+    addDictatedLines(userId: string, quoteId: string, clipId: string, lines: readonly ExtractedLine[]): void {
+      const quote = loadEditable(userId, quoteId);
+      if (lines.length === 0) return;
+      transaction(db, () => {
+        for (const line of lines) repo.insertLine(db, quote.id, { ...line, source: "dictation", clipId });
+        touch(quote);
+      });
     },
 
     changeStatus(userId: string, quoteId: string, to: QuoteStatus, actor: Actor = "artisan"): QuoteDetail {

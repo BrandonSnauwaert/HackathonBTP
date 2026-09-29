@@ -36,6 +36,8 @@ export interface QuoteLine {
   unitPriceCents: number | null;
   vatRateBp: number;
   source: LineSource;
+  /** Dictée dont la ligne est issue (null pour une ligne saisie à la main). */
+  clipId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,6 +101,7 @@ const LineRow = z
     unit_price_cents: z.number().nullable(),
     vat_rate_bp: z.number(),
     source: z.enum(["manual", "dictation"]),
+    clip_id: z.string().nullable(),
     created_at: z.string(),
     updated_at: z.string(),
   })
@@ -114,6 +117,7 @@ const LineRow = z
       unitPriceCents: r.unit_price_cents,
       vatRateBp: r.vat_rate_bp,
       source: r.source,
+      clipId: r.clip_id,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     } satisfies QuoteLine,
@@ -245,7 +249,7 @@ export function getLine(db: Database, quoteId: string, lineId: string): QuoteLin
 }
 
 export type LineInput = Pick<QuoteLine, "description" | "quantity" | "unit" | "vatRateBp"> &
-  PatchOf<Pick<QuoteLine, "room" | "unitPriceCents" | "source">>;
+  PatchOf<Pick<QuoteLine, "room" | "unitPriceCents" | "source" | "clipId">>;
 
 export function insertLine(db: Database, quoteId: string, input: LineInput): QuoteLine {
   const id = randomUUID();
@@ -253,10 +257,10 @@ export function insertLine(db: Database, quoteId: string, input: LineInput): Quo
   execute(
     db,
     `INSERT INTO quote_lines (id, quote_id, position, description, room, quantity, unit, unit_price_cents,
-       vat_rate_bp, source, created_at, updated_at)
+       vat_rate_bp, source, clip_id, created_at, updated_at)
      VALUES (:id, :quoteId,
        (SELECT COALESCE(MAX(position), 0) + 1 FROM quote_lines WHERE quote_id = :quoteId),
-       :description, :room, :quantity, :unit, :unitPriceCents, :vatRateBp, :source, :now, :now)`,
+       :description, :room, :quantity, :unit, :unitPriceCents, :vatRateBp, :source, :clipId, :now, :now)`,
     {
       id,
       quoteId,
@@ -267,6 +271,7 @@ export function insertLine(db: Database, quoteId: string, input: LineInput): Quo
       unitPriceCents: input.unitPriceCents ?? null,
       vatRateBp: input.vatRateBp,
       source: input.source ?? "manual",
+      clipId: input.clipId ?? null,
       now,
     },
   );

@@ -1,6 +1,6 @@
 /**
  * Contrat commun à tous les fournisseurs de transcription
- * (mock, Deepgram, microservice Python Kyutai...).
+ * (mock, Kyutai, plus tard Deepgram...).
  */
 
 export interface TranscriptEvent {
@@ -10,10 +10,15 @@ export interface TranscriptEvent {
 }
 
 export interface Transcriber {
-  /** Envoie un morceau d'audio brut reçu du client. */
+  /** Envoie un morceau d'audio : PCM s16le mono 24 kHz (cf. audio/audio-format.ts). */
   sendAudio(chunk: Buffer): void;
   /** Enregistre un callback appelé à chaque résultat de transcription. */
   onTranscript(callback: (event: TranscriptEvent) => void): void;
+  /**
+   * Signale la fin de l'audio et se résout quand tout ce qui a été envoyé est transcrit :
+   * les derniers segments ont alors été émis en isFinal=true. Sert à transcrire un clip complet.
+   */
+  flush(): Promise<void>;
   /** Libère les ressources (timers, connexions au fournisseur...). */
   close(): void;
 }

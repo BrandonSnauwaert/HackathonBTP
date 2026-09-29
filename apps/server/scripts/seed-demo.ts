@@ -22,7 +22,7 @@ export const DEMO_EMAIL = "demo@artisan.test";
 export const DEMO_PASSWORD = "demo1234";
 
 const db = openDatabase(config.DATABASE_PATH);
-const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS });
+const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS, clipsDir: config.CLIPS_DIR });
 
 const existing = findUserByEmail(db, DEMO_EMAIL);
 if (existing) execute(db, "DELETE FROM users WHERE id = :id", { id: existing.id });

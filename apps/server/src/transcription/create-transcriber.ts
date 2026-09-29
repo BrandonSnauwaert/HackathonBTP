@@ -1,4 +1,4 @@
-import type { Config } from "./config.js";
+import type { Config } from "../config.js";
 import { KyutaiTranscriber, type Logger } from "./kyutai-transcriber.js";
 import { MockTranscriber } from "./mock-transcriber.js";
 import type { Transcriber } from "./transcriber.js";

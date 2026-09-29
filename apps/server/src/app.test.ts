@@ -2,32 +2,41 @@
  * Test d'intégration de l'API : parcours complet sur une base SQLite en mémoire.
  */
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app.js";
-import type { Config } from "./config.js";
+import { parseConfig } from "./config.js";
 import { openDatabase } from "./db/database.js";
+import { mockLineExtractor, type LineExtractor } from "./llm/line-extractor.js";
 
-const config: Config = {
-  PORT: 0,
-  HOST: "127.0.0.1",
-  DATABASE_PATH: ":memory:",
-  SESSION_TTL_DAYS: 1,
-  COOKIE_SECURE: false,
-  FOLLOW_UP_AFTER_DAYS: 7,
-  TRANSCRIBER: "mock",
-  KYUTAI_URL: "ws://localhost:8080/api/asr-streaming",
-  KYUTAI_API_KEY: "public_token",
-  KYUTAI_PAUSE_HEAD: 1,
-  KYUTAI_PAUSE_THRESHOLD: 0.5,
+const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
+const config = parseConfig({ DATABASE_PATH: ":memory:", CLIPS_DIR: clipsDir, TRANSCRIBER: "mock", LLM_PROVIDER: "mock" });
+const sampleWav = readFileSync(new URL("../samples/chantier-fr.wav", import.meta.url));
+
+/** Extracteur de test : échoue tant que `failNext` est vrai, sinon délègue au mock. */
+const flakyExtractor: LineExtractor & { failNext: boolean } = {
+  failNext: false,
+  async extract(input) {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("LLM indisponible");
+    }
+    return mockLineExtractor.extract(input);
+  },
 };
 
 let app: FastifyInstance;
 
 before(async () => {
-  app = await buildApp({ config, db: openDatabase(":memory:"), logger: false });
+  app = await buildApp({ config, db: openDatabase(":memory:"), logger: false, extractor: flakyExtractor });
 });
-after(() => app.close());
+after(async () => {
+  await app.close();
+  rmSync(clipsDir, { recursive: true, force: true });
+});
 
 /** Crée un compte et renvoie une fonction de requête authentifiée. */
 async function signUp(email: string) {
@@ -35,8 +44,10 @@ async function signUp(email: string) {
   assert.equal(res.statusCode, 201, res.body);
   const cookie = res.cookies.find((c) => c.name === "sid");
   assert.ok(cookie, "cookie de session posé");
-  return (method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", url: string, payload?: object) =>
-    app.inject({ method, url, cookies: { sid: cookie.value }, ...(payload ? { payload } : {}) });
+  const cookies = { sid: cookie.value };
+  const request = (method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE", url: string, payload?: object) =>
+    app.inject({ method, url, cookies, ...(payload ? { payload } : {}) });
+  return Object.assign(request, { cookies });
 }
 
 describe("API", () => {
@@ -214,6 +225,96 @@ describe("API", () => {
     const b = (await api("POST", "/api/quotes", { clientId: client.id })).json();
     assert.match(a.number, /-0001$/);
     assert.match(b.number, /-0002$/);
+  });
+
+  it("traite une dictée : transcription, extraction, lignes ajoutées", async () => {
+    const api = await signUp("dictee@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const clientClipId = "7f1c1c1e-4a57-4c0e-9d5e-2b9a3f1e0c11";
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips?wait=true&clientClipId=${clientClipId}`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: sampleWav,
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const clip = res.json();
+    assert.equal(clip.status, "done");
+    assert.ok(clip.transcript.length > 0);
+    assert.ok(clip.durationMs > 15_000);
+    assert.equal(clip.lineCount, 1);
+
+    const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+    assert.equal(detail.lines.length, 1);
+    assert.equal(detail.lines[0].source, "dictation");
+    assert.equal(detail.lines[0].clipId, clip.id);
+    assert.equal(detail.lines[0].unitPriceCents, null, "le prix reste à l'artisan");
+    assert.equal(detail.clips.length, 1);
+
+    // Renvoi du même clip (reprise après coupure) : pas de doublon
+    const again = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips?clientClipId=${clientClipId}`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: sampleWav,
+    });
+    assert.equal(again.statusCode, 200);
+    assert.equal(again.json().id, clip.id);
+    assert.equal((await api("GET", `/api/quotes/${quote.id}/clips`)).json().length, 1);
+
+    // Réécoute
+    const audio = await api("GET", `/api/quotes/${quote.id}/clips/${clip.id}/audio`);
+    assert.equal(audio.statusCode, 200);
+    assert.equal(audio.headers["content-type"], "audio/wav");
+    assert.equal(audio.rawPayload.toString("ascii", 0, 4), "RIFF");
+  });
+
+  it("marque une dictée en échec puis la relance sans refaire la transcription", async () => {
+    const api = await signUp("echec@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    flakyExtractor.failNext = true;
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips?wait=true`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: sampleWav,
+    });
+    const failed = res.json();
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.error, "LLM indisponible");
+    assert.ok(failed.transcript, "la transcription est conservée");
+
+    const retried = await api("POST", `/api/quotes/${quote.id}/clips/${failed.id}/retry`);
+    assert.equal(retried.statusCode, 202, retried.body);
+    let clip = retried.json();
+    for (let i = 0; i < 50 && clip.status !== "done"; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      clip = (await api("GET", `/api/quotes/${quote.id}/clips/${failed.id}`)).json();
+    }
+    assert.equal(clip.status, "done");
+    assert.equal(clip.transcript, failed.transcript);
+
+    const again = await api("POST", `/api/quotes/${quote.id}/clips/${failed.id}/retry`);
+    assert.equal(again.statusCode, 409, "une dictée traitée ne se relance pas");
+  });
+
+  it("refuse un audio invalide", async () => {
+    const api = await signUp("audio@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: Buffer.from("ceci n'est pas un wav"),
+    });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error, "invalid_audio");
   });
 
   it("expose la doc OpenAPI", async () => {

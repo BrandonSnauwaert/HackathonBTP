@@ -104,7 +104,7 @@ export const quoteRoutes: FastifyPluginAsyncZod<{ quotes: QuoteService }> = asyn
       },
     },
     async (request, reply) => {
-      quotes.remove(requireUser(request).id, request.params.id);
+      await quotes.remove(requireUser(request).id, request.params.id);
       return reply.code(204).send(null);
     },
   );

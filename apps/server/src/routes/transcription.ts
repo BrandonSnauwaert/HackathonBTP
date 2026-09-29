@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { RawData } from "ws";
 import type { Config } from "../config.js";
-import { createTranscriber } from "../create-transcriber.js";
+import { createTranscriber } from "../transcription/create-transcriber.js";
 
 function toBuffer(data: RawData): Buffer {
   if (Buffer.isBuffer(data)) return data;

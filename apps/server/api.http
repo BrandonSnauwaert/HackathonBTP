@@ -76,3 +76,22 @@ Content-Type: application/json
 
 ### Détail complet : lignes, totaux, TVA, historique
 GET {{base}}/quotes/{{quoteId}}
+
+### --- Dictées ---
+
+### Envoyer une dictée (WAV) et attendre le résultat : transcription + lignes extraites
+POST {{base}}/quotes/{{quoteId}}/clips?wait=true
+Content-Type: audio/wav
+
+< ./samples/chantier-fr.wav
+
+> {% client.global.set("clipId", response.body.id); %}
+
+### Dictées du devis et leur état
+GET {{base}}/quotes/{{quoteId}}/clips
+
+### Réécouter la dictée
+GET {{base}}/quotes/{{quoteId}}/clips/{{clipId}}/audio
+
+### Relancer une dictée en échec (ex. LLM indisponible)
+POST {{base}}/quotes/{{quoteId}}/clips/{{clipId}}/retry

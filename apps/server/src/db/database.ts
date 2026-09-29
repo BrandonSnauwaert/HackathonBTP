@@ -107,6 +107,29 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX quote_events_quote_id ON quote_events(quote_id);
   `,
+  `
+  -- Dictées audio (talkie-walkie) : transcrites puis analysées par le LLM en tâche de fond.
+  CREATE TABLE clips (
+    id             TEXT PRIMARY KEY,
+    quote_id       TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+    -- Identifiant généré par le téléphone : un clip renvoyé après une coupure n'est pas dupliqué.
+    client_clip_id TEXT,
+    status         TEXT NOT NULL,
+    audio_file     TEXT NOT NULL,
+    duration_ms    INTEGER NOT NULL,
+    transcript     TEXT,
+    warnings       TEXT NOT NULL DEFAULT '[]',
+    error          TEXT,
+    attempts       INTEGER NOT NULL DEFAULT 0,
+    recorded_at    TEXT NOT NULL,
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL,
+    UNIQUE (quote_id, client_clip_id)
+  );
+  CREATE INDEX clips_quote_id ON clips(quote_id);
+
+  ALTER TABLE quote_lines ADD COLUMN clip_id TEXT REFERENCES clips(id) ON DELETE SET NULL;
+  `,
 ];
 
 export function openDatabase(path: string): Database {

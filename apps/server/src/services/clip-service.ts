@@ -1,0 +1,209 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { InvalidAudioError, encodeWav, pcm16DurationMs, wavToPcm16 } from "../audio/wav.js";
+import type { Database } from "../db/database.js";
+import { HttpError } from "../http/errors.js";
+import type { LineExtractor } from "../llm/line-extractor.js";
+import {
+  countLinesByClip,
+  findClipByClientId,
+  findClipById,
+  findClipOwner,
+  getClip,
+  insertClip,
+  listClips,
+  listUnfinishedClipIds,
+  toClipView,
+  updateClip,
+  type Clip,
+  type ClipView,
+} from "../repositories/clips.js";
+import { getQuote, listLines } from "../repositories/quotes.js";
+import type { Logger } from "../transcription/kyutai-transcriber.js";
+import { transcribeAudio } from "../transcription/transcribe-audio.js";
+import type { Transcriber } from "../transcription/transcriber.js";
+import type { QuoteService } from "./quote-service.js";
+
+export interface ClipServiceDeps {
+  db: Database;
+  quotes: QuoteService;
+  clipsDir: string;
+  maxClipSeconds: number;
+  createTranscriber: () => Transcriber;
+  extractor: LineExtractor;
+  logger: Logger;
+}
+
+export interface UploadMeta {
+  /** Identifiant généré par le téléphone, pour ne pas dupliquer un clip renvoyé. */
+  clientClipId?: string | undefined;
+  /** Moment de l'enregistrement (la dictée a pu être faite hors connexion bien avant l'envoi). */
+  recordedAt?: string | undefined;
+}
+
+const MIN_CLIP_MS = 300;
+const isFinished = (clip: Clip) => clip.status === "done" || clip.status === "failed";
+
+/**
+ * Dictées audio : dépôt, puis traitement en tâche de fond, un clip à la fois
+ * (transcription Kyutai → extraction des lignes par le LLM → ajout au devis).
+ */
+export function createClipService(deps: ClipServiceDeps) {
+  const { db, quotes, clipsDir, logger } = deps;
+  let queue: Promise<void> = Promise.resolve();
+  const listeners = new Map<string, Set<() => void>>();
+
+  function view(clip: Clip): ClipView {
+    return toClipView(clip, countLinesByClip(db, clip.quoteId).get(clip.id) ?? 0);
+  }
+
+  function notify(clipId: string): void {
+    for (const listener of listeners.get(clipId) ?? []) listener();
+    listeners.delete(clipId);
+  }
+
+  async function process(clipId: string): Promise<void> {
+    const clip = findClipById(db, clipId);
+    const userId = findClipOwner(db, clipId);
+    if (!clip || !userId || isFinished(clip)) return;
+
+    try {
+      let transcript = clip.transcript;
+      if (transcript === null) {
+        updateClip(db, clipId, { status: "transcribing", attempts: clip.attempts + 1, error: null });
+        const pcm = wavToPcm16(await readFile(join(clipsDir, clip.audioFile)));
+        transcript = await transcribeAudio(deps.createTranscriber(), pcm);
+        updateClip(db, clipId, { transcript });
+      }
+
+      updateClip(db, clipId, { status: "extracting" });
+      if (!transcript.trim()) {
+        updateClip(db, clipId, { status: "done", warnings: ["Aucune parole détectée dans l'enregistrement"] });
+        return;
+      }
+      const result = await deps.extractor.extract({
+        transcript,
+        existingLines: listLines(db, clip.quoteId).map((l) => ({
+          description: l.description,
+          room: l.room,
+          quantity: l.quantity,
+          unit: l.unit,
+        })),
+      });
+      quotes.addDictatedLines(userId, clip.quoteId, clipId, result.lines);
+      const warnings = result.lines.length === 0 ? ["Aucune prestation détectée dans la dictée", ...result.warnings] : result.warnings;
+      updateClip(db, clipId, { status: "done", warnings });
+      logger.info({ clipId, lines: result.lines.length }, "dictée traitée");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      updateClip(db, clipId, { status: "failed", error: message });
+      logger.error({ err, clipId }, "échec du traitement de la dictée");
+    } finally {
+      notify(clipId);
+    }
+  }
+
+  function enqueue(clipId: string): void {
+    queue = queue.then(() => process(clipId));
+  }
+
+  /** Se résout quand le clip est traité (ou en échec), ou au bout du délai. */
+  function waitFor(clipId: string, timeoutMs: number): Promise<void> {
+    const clip = findClipById(db, clipId);
+    if (!clip || isFinished(clip)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(done, timeoutMs);
+      function done() {
+        clearTimeout(timer);
+        listeners.get(clipId)?.delete(done);
+        resolve();
+      }
+      const set = listeners.get(clipId) ?? new Set();
+      set.add(done);
+      listeners.set(clipId, set);
+    });
+  }
+
+  return {
+    async upload(userId: string, quoteId: string, audio: Buffer, meta: UploadMeta): Promise<{ clip: ClipView; created: boolean }> {
+      quotes.assertEditable(userId, quoteId);
+      if (meta.clientClipId) {
+        const existing = findClipByClientId(db, quoteId, meta.clientClipId);
+        if (existing) return { clip: view(existing), created: false };
+      }
+
+      let pcm: Buffer;
+      try {
+        pcm = wavToPcm16(audio);
+      } catch (err) {
+        if (err instanceof InvalidAudioError) throw new HttpError(400, "invalid_audio", err.message);
+        throw err;
+      }
+      const durationMs = pcm16DurationMs(pcm);
+      if (durationMs < MIN_CLIP_MS) throw new HttpError(400, "clip_too_short", "Enregistrement trop court");
+      if (durationMs > deps.maxClipSeconds * 1000) {
+        throw new HttpError(400, "clip_too_long", `Enregistrement trop long (${deps.maxClipSeconds} s maximum)`);
+      }
+
+      const id = randomUUID();
+      const audioFile = `${id}.wav`;
+      await mkdir(clipsDir, { recursive: true });
+      await writeFile(join(clipsDir, audioFile), encodeWav(pcm));
+      try {
+        insertClip(db, {
+          id,
+          quoteId,
+          clientClipId: meta.clientClipId ?? null,
+          audioFile,
+          durationMs,
+          recordedAt: meta.recordedAt ?? new Date().toISOString(),
+        });
+      } catch (err) {
+        // Deux envois simultanés du même clip : le second récupère le premier.
+        const existing = meta.clientClipId ? findClipByClientId(db, quoteId, meta.clientClipId) : undefined;
+        if (existing) return { clip: view(existing), created: false };
+        throw err;
+      }
+      enqueue(id);
+      return { clip: view(getClip(db, quoteId, id)), created: true };
+    },
+
+    list(userId: string, quoteId: string): ClipView[] {
+      getQuote(db, userId, quoteId);
+      return listClips(db, quoteId).map(view);
+    },
+
+    get(userId: string, quoteId: string, clipId: string): ClipView {
+      getQuote(db, userId, quoteId);
+      return view(getClip(db, quoteId, clipId));
+    },
+
+    audioPath(userId: string, quoteId: string, clipId: string): string {
+      getQuote(db, userId, quoteId);
+      return join(clipsDir, getClip(db, quoteId, clipId).audioFile);
+    },
+
+    retry(userId: string, quoteId: string, clipId: string): ClipView {
+      quotes.assertEditable(userId, quoteId);
+      const clip = getClip(db, quoteId, clipId);
+      if (clip.status !== "failed") {
+        throw new HttpError(409, "clip_not_failed", "Seule une dictée en échec peut être relancée");
+      }
+      updateClip(db, clipId, { status: "pending", error: null });
+      enqueue(clipId);
+      return view(getClip(db, quoteId, clipId));
+    },
+
+    waitFor,
+
+    /** Relance les clips restés en cours (redémarrage du serveur). */
+    resume(): void {
+      const ids = listUnfinishedClipIds(db);
+      if (ids.length > 0) logger.info({ count: ids.length }, "reprise des dictées en attente");
+      for (const id of ids) enqueue(id);
+    },
+  };
+}
+
+export type ClipService = ReturnType<typeof createClipService>;

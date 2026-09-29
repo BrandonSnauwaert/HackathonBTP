@@ -1,0 +1,6 @@
+{
+  // Vérification des types des scripts (npm run typecheck) ; ils sont exécutés par tsx, jamais compilés.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "rootDir": "..", "noEmit": true },
+  "include": ["./**/*.ts", "../src/**/*.ts"]
+}
