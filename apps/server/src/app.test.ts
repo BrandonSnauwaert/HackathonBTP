@@ -660,6 +660,32 @@ describe("API", () => {
       assert.equal(fakeMailer.sent.length, 0);
     });
 
+    it("renvoie l'e-mail d'un devis envoyé, à l'adresse corrigée, sans changer le devis", async () => {
+      const { api, quote } = await readyQuote("renvoi@test.fr");
+      let res = await api("POST", `/api/quotes/${quote.id}/resend`);
+      assert.equal(res.statusCode, 409, "rien à renvoyer tant que le devis n'est pas envoyé");
+      assert.equal(res.json().error, "quote_not_sent");
+
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const sent = (await api("POST", `/api/quotes/${quote.id}/send`)).json();
+      await api("PATCH", `/api/clients/${quote.client.id}`, { email: "bonne-adresse@example.com" });
+      fakeMailer.sent.length = 0;
+
+      res = await api("POST", `/api/quotes/${quote.id}/resend`);
+      assert.equal(res.statusCode, 200, res.body);
+      assert.equal(fakeMailer.sent[0]?.to.address, "bonne-adresse@example.com");
+      assert.ok(fakeMailer.sent[0]?.html.includes(sent.publicUrl), "même lien");
+      const detail = res.json();
+      assert.equal(detail.status, "sent");
+      assert.equal(detail.sentAt, sent.sentAt, "date d'envoi inchangée");
+      assert.ok(detail.events.some((e: { type: string }) => e.type === "email_resent"));
+
+      fakeMailer.failNext = true;
+      res = await api("POST", `/api/quotes/${quote.id}/resend`);
+      assert.equal(res.statusCode, 502);
+      assert.equal(res.json().error, "email_failed");
+    });
+
     it("refuse un lien inconnu ou mal formé", async () => {
       assert.equal((await publicApi("GET", "abcdefghijklmnopqrstuvwxyz")).statusCode, 404);
       assert.equal((await publicApi("GET", "trop-court")).statusCode, 400);

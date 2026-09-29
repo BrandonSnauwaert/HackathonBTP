@@ -17,6 +17,9 @@ const formatDateTime = (iso: string) => dateTime.format(new Date(iso));
 import { HoldToTalkButton } from "./HoldToTalkButton";
 import { PhotoSection } from "./PhotoSection";
 
+/** Devis envoyés, toujours en attente de réponse : leur e-mail peut être renvoyé. */
+const RESENDABLE: readonly QuoteStatus[] = ["sent", "viewed", "follow_up"];
+
 const TRANSITION_LABELS: Partial<Record<QuoteStatus, string>> = {
   draft: "Repasser en brouillon",
   ready: "Marquer prêt à envoyer",
@@ -141,7 +144,7 @@ export function QuoteView({ quoteId, onChanged }: { quoteId: string; onChanged: 
           Aperçu du document ↗
         </a>
       </div>
-      {quote.publicUrl && <ClientLink quote={quote} />}
+      {quote.publicUrl && <ClientLink quote={quote} onResend={() => void run(() => api.resendEmail(quote.id))} />}
       {error && <p className="error-text">{error}</p>}
       {quote.issues.length > 0 && (
         <ul className="issues">
@@ -346,9 +349,10 @@ function ClipItem({ quoteId, clip, onRetry }: { quoteId: string; clip: Clip; onR
 }
 
 /** Lien de la page client d'un devis envoyé, avec son suivi (consultation, réponse). */
-function ClientLink({ quote }: { quote: QuoteDetail }) {
+function ClientLink({ quote, onResend }: { quote: QuoteDetail; onResend: () => void }) {
   const [copied, setCopied] = useState(false);
   const url = quote.publicUrl ?? "";
+  const lastResend = quote.events.findLast((e) => e.type === "email_resent")?.createdAt;
 
   return (
     <div className="client-link">
@@ -369,6 +373,14 @@ function ClientLink({ quote }: { quote: QuoteDetail }) {
           {copied ? "Copié" : "Copier"}
         </button>
       </p>
+      {RESENDABLE.includes(quote.status) && (
+        <p>
+          <button className="link" onClick={onResend}>
+            Renvoyer l'e-mail à {quote.client.email}
+          </button>
+          {lastResend && <span className="muted"> (dernier renvoi le {formatDateTime(lastResend)})</span>}
+        </p>
+      )}
       <p className="muted">
         {quote.viewedAt
           ? `Ouvert par le client le ${formatDateTime(quote.viewedAt)}`

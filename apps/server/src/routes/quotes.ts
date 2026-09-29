@@ -150,6 +150,23 @@ export const quoteRoutes: FastifyPluginAsyncZod<{ quotes: QuoteService }> = asyn
       quotes.send(requireUser(request).id, request.params.id, { byEmail: request.body?.byEmail ?? true }),
   );
 
+  app.post(
+    "/:id/resend",
+    {
+      schema: {
+        tags: quoteTags,
+        security,
+        summary: "Renvoyer l'e-mail d'un devis déjà envoyé",
+        description:
+          "Pour un devis envoyé, consulté ou à relancer : renvoie le même e-mail à l'adresse actuelle du client " +
+          "(corriger l'adresse sur la fiche client si besoin). Le statut et la date du devis ne changent pas.",
+        params: IdParams,
+        response: { 200: QuoteDetailSchema, 502: ErrorResponseSchema, ...errors },
+      },
+    },
+    async (request) => quotes.resendEmail(requireUser(request).id, request.params.id),
+  );
+
   app.get(
     "/:id/document",
     {

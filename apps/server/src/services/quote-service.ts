@@ -97,6 +97,9 @@ export type CreateQuoteInput = {
 
 export type QuoteMetaUpdate = Omit<QuoteUpdate, "status" | "sentAt">;
 
+/** Devis envoyés et toujours en attente de réponse : leur e-mail peut être renvoyé. */
+const RESENDABLE: readonly QuoteStatus[] = ["sent", "viewed", "follow_up"];
+
 /** Statuts que l'artisan peut poser lui-même via l'API (l'envoi passe par sa propre route). */
 const MANUAL_STATUSES: readonly QuoteStatus[] = ["draft", "ready", "accepted", "declined"];
 
@@ -177,6 +180,36 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
         preview ? toPhotoView(photo).url : `/api/public/quotes/${quote.publicToken}/photos/${photo.id}`,
       preview,
     });
+  }
+
+  /** E-mail du devis au client (adresse actuelle de la fiche client). `failure` : fin du message d'erreur. */
+  async function emailQuote(userId: string, quote: Quote, failure: string): Promise<void> {
+    const company = getCompany(db, userId);
+    const client = getClient(db, userId, quote.clientId);
+    if (!client.email) throw conflict("client_email_missing", "Le client n'a pas d'adresse e-mail");
+    const doc = documentOf(userId, quote, false);
+    const email = buildQuoteEmail({
+      companyName: company.name,
+      companyPhone: company.phone,
+      clientName: client.name,
+      quoteNumber: quote.number,
+      title: quote.title,
+      totalTtcCents: doc.totals.totalTtcCents,
+      validUntil: doc.validUntil,
+      publicUrl: publicUrl(quote),
+      pixelUrl: `${options.publicBaseUrl.replace(/\/$/, "")}/api/public/quotes/${quote.publicToken}/pixel.gif`,
+    });
+    try {
+      await options.mailer.send({
+        to: { address: client.email, name: client.name },
+        fromName: company.name,
+        replyTo: company.email || undefined,
+        ...email,
+      });
+    } catch (err) {
+      const message = err instanceof EmailError ? err.message : "L'e-mail n'a pas pu être envoyé";
+      throw new HttpError(502, "email_failed", `${message}. ${failure}`);
+    }
   }
 
   /** Devis accessible par son lien public : uniquement une fois envoyé (jamais un brouillon). */
@@ -339,33 +372,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       }
 
       const sentAt = new Date().toISOString();
-      if (byEmail) {
-        const company = getCompany(db, userId);
-        const client = getClient(db, userId, quote.clientId);
-        const doc = documentOf(userId, { ...quote, sentAt }, false);
-        const email = buildQuoteEmail({
-          companyName: company.name,
-          companyPhone: company.phone,
-          clientName: client.name,
-          quoteNumber: quote.number,
-          title: quote.title,
-          totalTtcCents: doc.totals.totalTtcCents,
-          validUntil: doc.validUntil,
-          publicUrl: publicUrl(quote),
-          pixelUrl: `${options.publicBaseUrl.replace(/\/$/, "")}/api/public/quotes/${quote.publicToken}/pixel.gif`,
-        });
-        try {
-          await options.mailer.send({
-            to: { address: client.email, name: client.name },
-            fromName: company.name,
-            replyTo: company.email || undefined,
-            ...email,
-          });
-        } catch (err) {
-          const message = err instanceof EmailError ? err.message : "L'e-mail n'a pas pu être envoyé";
-          throw new HttpError(502, "email_failed", `${message}. Le devis n'a pas été envoyé.`);
-        }
-      }
+      if (byEmail) await emailQuote(userId, { ...quote, sentAt }, "Le devis n'a pas été envoyé.");
 
       transaction(db, () => {
         repo.updateQuote(db, quote.id, { status: "sent", sentAt });
@@ -376,6 +383,23 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
           toStatus: "sent",
         });
       });
+      return detail(userId, quoteId);
+    },
+
+    /**
+     * Renvoie l'e-mail d'un devis déjà envoyé (e-mail perdu, adresse corrigée sur la fiche client...).
+     * Ne change ni le statut ni la date du devis ; le renvoi est noté dans l'historique.
+     */
+    async resendEmail(userId: string, quoteId: string): Promise<QuoteDetail> {
+      const quote = refresh(repo.getQuote(db, userId, quoteId));
+      if (!RESENDABLE.includes(quote.status)) {
+        throw conflict(
+          "quote_not_sent",
+          `L'e-mail d'un devis « ${STATUS_LABELS[quote.status]} » ne peut pas être renvoyé`,
+        );
+      }
+      await emailQuote(userId, quote, "Rien n'a été renvoyé.");
+      repo.insertEvent(db, quote.id, { type: "email_resent", actor: "artisan" });
       return detail(userId, quoteId);
     },
 

@@ -60,6 +60,7 @@ export const api = {
     request<QuoteDetail>("POST", "/quotes", { client, title }),
   /** byEmail = false : aucun e-mail, l'artisan partage le lien lui-même. */
   sendQuote: (id: string, byEmail = true) => request<QuoteDetail>("POST", `/quotes/${id}/send`, { byEmail }),
+  resendEmail: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/resend`),
   previewDocument: (id: string) => request<QuoteDocument>("GET", `/quotes/${id}/document`),
   changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
 
