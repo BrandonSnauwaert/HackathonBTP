@@ -79,21 +79,23 @@ L'artisan **dicte** ce qu'il faut faire, directement sur le chantier, même **sa
 ## Cycle de vie d'un devis
 
 ```
-brouillon ──► prêt ──► envoyé ──► consulté ──► accepté
-                          │           │     └─► refusé
-                          └───────────┴──► à relancer ──► (consulté / accepté / refusé)
-                    (tout devis non signé) ──► expiré
+brouillon ⇄ prêt ──► envoyé ──► consulté ──► accepté / refusé
+                        │           │
+                        └───────────┴──► à relancer ──► accepté / refusé
+         envoyé / consulté / à relancer ──► expiré (validité dépassée)
 ```
 
-| Statut | Signification | Déclenché par |
-|---|---|---|
-| `brouillon` | En cours de rédaction : dictées pas toutes traitées, ou lignes à compléter | création |
-| `pret` | Complet (client, lignes, prix), prêt à partir | l'artisan valide |
-| `envoye` | E-mail parti | envoi |
-| `consulte` | Le client a ouvert la page du devis (ou le pixel a été chargé) | automatique |
-| `a_relancer` | Pas de réponse **7 jours** après l'envoi (délai réglable) | automatique |
-| `accepte` / `refuse` | Réponse du client | le client sur la page du devis (« Accepter » / « Refuser »), ou l'artisan à la main |
-| `expire` | Durée de validité dépassée sans signature | automatique |
+| Statut | Code API | Signification | Déclenché par |
+|---|---|---|---|
+| Brouillon | `draft` | En cours de rédaction : dictées pas toutes traitées, ou lignes à compléter | création ; toute modification d'un devis « prêt » |
+| Prêt à envoyer | `ready` | Complet (profil entreprise, e-mail du client, lignes chiffrées) | l'artisan valide |
+| Envoyé | `sent` | E-mail parti | envoi |
+| Consulté | `viewed` | Le client a ouvert la page du devis (ou le pixel a été chargé) | automatique |
+| À relancer | `follow_up` | Pas de réponse **7 jours** après l'envoi (délai réglable) | automatique |
+| Accepté / Refusé | `accepted` / `declined` | Réponse du client | le client sur la page du devis (« Accepter » / « Refuser »), ou l'artisan à la main (réponse orale) |
+| Expiré | `expired` | Durée de validité dépassée sans réponse | automatique |
+
+Un devis envoyé est un document remis au client : il n'est plus modifiable.
 
 ## Le devis : contenu attendu
 

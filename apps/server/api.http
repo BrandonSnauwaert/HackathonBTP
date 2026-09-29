@@ -1,0 +1,78 @@
+### Parcours complet de l'API, à rejouer dans le client HTTP de l'IDE (JetBrains).
+### Prérequis : serveur lancé (npm run dev) et compte de démo créé (npm run seed:demo).
+### Le cookie de session est conservé automatiquement entre les requêtes.
+### Doc interactive : http://localhost:3000/docs
+
+@base = http://localhost:3000/api
+
+### Connexion au compte de démo
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "email": "demo@artisan.test", "password": "demo1234" }
+
+### Utilisateur connecté
+GET {{base}}/auth/me
+
+### Profil entreprise (mentions légales)
+GET {{base}}/company
+
+### Liste des devis
+GET {{base}}/quotes
+
+### Liste filtrée : devis à relancer
+GET {{base}}/quotes?status=follow_up
+
+### Nouveau devis, avec un nouveau client
+POST {{base}}/quotes
+Content-Type: application/json
+
+{
+  "client": { "name": "Mme Claire Petit", "email": "claire.petit@example.com", "phone": "06 01 02 03 04" },
+  "title": "Rénovation entrée",
+  "siteAddress": "41 rue Victor Hugo, 69002 Lyon"
+}
+
+> {% client.global.set("quoteId", response.body.id); %}
+
+### Ajouter une ligne chiffrée
+POST {{base}}/quotes/{{quoteId}}/lines
+Content-Type: application/json
+
+{
+  "description": "Remplacement de la porte d'entrée",
+  "room": "Entrée",
+  "quantity": 1,
+  "unit": "u",
+  "unitPriceCents": 120000,
+  "vatRateBp": 1000
+}
+
+### Ajouter une ligne sans prix (à chiffrer)
+POST {{base}}/quotes/{{quoteId}}/lines
+Content-Type: application/json
+
+{ "description": "Ragréage du sol", "room": "Entrée", "quantity": 8.5, "unit": "m2", "vatRateBp": 1000 }
+
+> {% client.global.set("lineId", response.body.lines[1].id); %}
+
+### Tenter de passer en « prêt » : 409, une ligne sans prix
+POST {{base}}/quotes/{{quoteId}}/status
+Content-Type: application/json
+
+{ "status": "ready" }
+
+### Chiffrer la ligne
+PATCH {{base}}/quotes/{{quoteId}}/lines/{{lineId}}
+Content-Type: application/json
+
+{ "unitPriceCents": 2800 }
+
+### Passer en « prêt »
+POST {{base}}/quotes/{{quoteId}}/status
+Content-Type: application/json
+
+{ "status": "ready" }
+
+### Détail complet : lignes, totaux, TVA, historique
+GET {{base}}/quotes/{{quoteId}}

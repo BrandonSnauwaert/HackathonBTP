@@ -9,13 +9,21 @@ Pour le besoin, le périmètre et les décisions produit, lire d'abord [`CONTEXT
 
 ```
 apps/server/            API Node.js (Fastify, TypeScript)
-  src/index.ts          point d'entrée, routes
+  src/index.ts          point d'entrée (ouvre la base, lance le serveur)
+  src/app.ts            construction de l'app : plugins, doc OpenAPI, gestion d'erreurs, routes
   src/config.ts         variables d'environnement (validées par zod)
-  src/transcriber.ts    interface commune des fournisseurs de transcription
-  src/mock-transcriber.ts / kyutai-transcriber.ts / create-transcriber.ts
+  src/db/database.ts    SQLite : migrations, transactions, helpers de requête validés par zod
+  src/domain/           logique métier pure et testée : statuts, calculs HT/TVA/TTC, unités
+  src/repositories/     accès aux données (SQL), une table par fichier ou presque
+  src/services/         règles métier qui combinent plusieurs dépôts (quote-service.ts)
+  src/http/             schémas zod de l'API, erreurs HTTP, nettoyage de la doc OpenAPI
+  src/routes/           routes Fastify, une par ressource (auth, company, clients, quotes, transcription)
+  src/auth/             mots de passe (scrypt) et session par cookie
+  src/*transcriber*.ts  transcription : interface commune, mock, Kyutai
   src/audio-format.ts   format audio attendu (PCM s16le mono 24 kHz)
-  scripts/              clients de test (WebSocket, navigateur headless)
+  scripts/              seed de démo, clients de test (WebSocket, navigateur headless)
   samples/              audio de test (chantier-fr.wav)
+  api.http              parcours complet de l'API, rejouable depuis l'IDE
 apps/web/               PWA React (Vite, TypeScript)
   public/pcm-recorder-worklet.js   capture micro vers PCM 24 kHz
   src/audio/  src/useTranscription.ts  src/App.tsx
@@ -30,10 +38,12 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Mock de transcription (`TRANSCRIBER=mock`) pour travailler sans GPU
 - [ ] Passage en **talkie-walkie** : clips audio au lieu du flux continu (le flux reste possible en aperçu quand le réseau est là)
 - [ ] File d'attente **hors connexion** : clips stockés dans IndexedDB, synchronisés au retour du réseau. Service worker et manifest PWA.
-- [ ] SQLite : artisans, profil entreprise, clients, devis, lignes, clips, événements de suivi
-- [ ] Authentification (e-mail + mot de passe, session par cookie) et compte de démo pré-rempli
+- [x] SQLite : artisans, profil entreprise, clients, devis, lignes, historique
+- [x] Authentification (e-mail + mot de passe, session par cookie) et compte de démo pré-rempli (`npm run seed:demo`)
+- [x] API REST des devis : CRUD, lignes, statuts, calcul HT / TVA / TTC, points manquants, doc OpenAPI sur `/docs`
+- [ ] Table des clips audio et route d'envoi d'un clip (`POST /api/quotes/:id/clips`)
 - [ ] Extraction des lignes de devis par le LLM (sortie JSON validée par zod)
-- [ ] Liste des devis avec statuts, écran d'édition, calcul HT / TVA / TTC
+- [ ] Front : liste des devis, écran d'édition (en attente des maquettes UI/UX)
 - [ ] Page publique du devis (lien secret) avec « Accepter » et « Refuser », suivi de consultation, pixel
 - [ ] Envoi de l'e-mail (service à choisir) et tunnel HTTPS vers le PC de démo
 - [ ] Bonus : PDF conforme, photos, relances automatiques
@@ -59,7 +69,8 @@ Machine de dev : Windows et PowerShell. Pour définir une variable d'environneme
 docker compose up -d kyutai-stt          # à la racine ; arrêt : docker compose stop kyutai-stt
 
 # 2. Serveur (port 3000). Copier .env.example en .env ; TRANSCRIBER=mock sans GPU.
-cd apps/server; npm run dev
+cd apps/server; npm run seed:demo   # (ré)initialise le compte demo@artisan.test / demo1234
+npm run dev                          # doc interactive de l'API : http://localhost:3000/docs
 
 # 3. Front (port 5173, fait proxy de /ws vers :3000)
 cd apps/web; npm run dev
@@ -72,14 +83,25 @@ Une tâche n'est **pas terminée** tant que ces vérifications ne passent pas :
 | Commande | Où | Rôle |
 |---|---|---|
 | `npm run typecheck` | apps/server | types du serveur |
+| `npm test` | apps/server | tests unitaires (domaine) et d'intégration (API sur SQLite en mémoire) |
 | `npm run build` | apps/web | types et build du front |
 | `npm run test:ws -- samples/chantier-fr.wav` | apps/server | streame le WAV au serveur lancé, affiche les transcriptions |
 | `npm run e2e -- http://localhost:5173 samples/chantier-fr.wav 20000` | apps/server | Chrome headless avec micro simulé : clique sur le micro et lit l'écran |
 
-- La **logique pure** (calculs de devis, TVA, transitions de statut) doit avoir des tests unitaires avec `node:test`, lancés via `tsx --test`.
+- La **logique pure** (calculs de devis, TVA, transitions de statut) doit avoir des tests unitaires (`*.test.ts` à côté du fichier, avec `node:test`).
+- Toute nouvelle route doit être couverte dans `src/app.test.ts` (via `app.inject`, sans serveur réel).
 - Pour un changement visible à l'écran, le vérifier dans le navigateur (ou avec le script e2e), pas seulement au typecheck.
 
 ## Contrats existants (ne pas casser sans prévenir)
+
+**API REST**, sous `/api`. La référence est la doc générée sur **`/docs`** (JSON brut : `/docs/json`), à partir des schémas zod de `src/http/schemas.ts`.
+- **Authentification** : `POST /api/auth/login` pose un cookie `sid` (httpOnly). Les autres routes répondent 401 sans lui.
+- **Erreurs** : toujours `{ error, message, details? }`. `error` est un code stable (`validation`, `unauthorized`, `not_found`, `quote_incomplete`, `invalid_transition`, `quote_locked`…), `message` est en français et affichable tel quel.
+- **Réponses de devis** : toute modification (lignes, infos, statut) renvoie le **devis complet** (`QuoteDetail`), avec les totaux recalculés, les points manquants (`issues`) et les transitions possibles (`allowedTransitions`). Le front n'a jamais à recalculer.
+- **Statuts** (codes en anglais dans l'API, libellé français dans `statusLabel`) : `draft`, `ready`, `sent`, `viewed`, `follow_up`, `accepted`, `declined`, `expired`. Transitions dans `src/domain/quote-status.ts`. Les statuts automatiques (à relancer, expiré) sont appliqués à la lecture, sans tâche planifiée.
+- Un devis n'est **modifiable** qu'en `draft` ou `ready`. Une modification repasse un devis `ready` en `draft`.
+
+Pour **ajouter une route** : schémas zod dans `src/http/schemas.ts` (avec `.meta({ id })` pour les objets réutilisés, et `.describe()` sur les champs), puis route dans `src/routes/`, avec `tags`, `summary`, `security: cookieAuth` et les réponses d'erreur. La doc se met à jour toute seule.
 
 **Interface de transcription**, dans `apps/server/src/transcriber.ts`. Tout fournisseur la respecte, et il est choisi par la variable `TRANSCRIBER` :
 ```ts
@@ -102,7 +124,9 @@ interface Transcriber {
 - **Langue :** identifiants de code en **anglais** ; commentaires, docs, interface et messages d'erreur visibles en **français**.
 - **TypeScript strict**, jamais de `any`. Pour une donnée d'origine externe (requête HTTP, message WebSocket, réponse du LLM, variables d'environnement), partir de `unknown` et valider avec **zod**.
 - **Serveur en ESM** : les imports relatifs se terminent par `.js` (`import { x } from "./foo.js"`).
-- **Argent en centimes entiers** (`priceCents: number`), jamais de flottants pour les montants. Taux de TVA en points de base (`vatRateBp: 2000` pour 20 %). Arrondis faits une seule fois, au niveau des totaux.
+- **Argent en centimes entiers** (`unitPriceCents: number`), jamais de flottants pour les montants. Taux de TVA en points de base (`vatRateBp: 2000` pour 20 %). Arrondi au centime sur le total de chaque ligne, puis sur la TVA de chaque taux. Tous les calculs passent par `src/domain/quote-totals.ts`.
+- **Accès aux données** : SQL uniquement dans `src/repositories/`, requêtes paramétrées (`:param`), lignes lues via `queryOne` / `queryAll` avec un schéma zod. Toujours filtrer par `user_id` : un artisan ne voit jamais les données d'un autre. Plusieurs écritures liées vont dans une `transaction()`.
+- **Schéma de base** : on ne modifie jamais une migration existante, on en ajoute une à la fin de `MIGRATIONS` (`src/db/database.ts`).
 - **Dates** en ISO 8601 UTC en base, affichées en `fr-FR`.
 - **Nommage des fichiers :** `kebab-case.ts` côté serveur ; composants React en `PascalCase.tsx` ; hooks en `useXxx.ts`.
 - **Configuration** : toute nouvelle variable d'environnement passe par `apps/server/src/config.ts` (schéma zod avec valeur par défaut) et va dans `.env.example`.
@@ -132,6 +156,9 @@ interface Transcriber {
 ## Pièges connus
 
 - **GPU de démo (GTX 1660, Turing, 6 Go) :** pas de bf16, d'où `dtype_override = "f16"` dans `services/kyutai-stt/config.toml` (~2,8 Go de VRAM). Si la sortie se dégrade, essayer `"f32"`. Sur une autre carte, rebuild avec le bon `CUDA_COMPUTE_CAP` (voir `docker-compose.yml`).
+- **`node:sqlite`** affiche un avertissement « ExperimentalWarning » au démarrage : c'est normal.
+- **Doc OpenAPI** : les identifiants de schéma (`.meta({ id })`) ne doivent pas finir par `Input`, car la librairie ajoute ce suffixe aux versions « entrée » et deux noms entreraient en collision (erreur 500 sur `/docs`).
+- `exactOptionalPropertyTypes` est activé : pour typer des champs optionnels venant de zod, utiliser `PatchOf<T>` (`src/types.ts`) plutôt que `Partial<T>`.
 - `batch_size = 2` dans la config Kyutai : 2 flux de transcription simultanés au maximum.
 - **Micro dans le navigateur :** exige HTTPS, sauf sur `localhost`. Pour tester depuis un téléphone, passer par le tunnel HTTPS.
 - **Kyutai ne produit du texte que si on lui envoie de l'audio.** Un clip doit être suivi d'environ 1 s de silence pour que les derniers mots sortent.
