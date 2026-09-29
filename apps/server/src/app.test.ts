@@ -2,7 +2,7 @@
  * Test d'intégration de l'API : parcours complet sur une base SQLite en mémoire.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -13,9 +13,12 @@ import { openDatabase } from "./db/database.js";
 import { mockLineExtractor, type LineExtractor } from "./llm/line-extractor.js";
 
 const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
+const photosDir = mkdtempSync(join(tmpdir(), "photos-"));
 const config = parseConfig({
   DATABASE_PATH: ":memory:",
   CLIPS_DIR: clipsDir,
+  PHOTOS_DIR: photosDir,
+  MAX_PHOTO_MB: "1",
   TRANSCRIBER: "mock",
   LLM_PROVIDER: "mock",
 });
@@ -45,7 +48,11 @@ before(async () => {
 after(async () => {
   await app.close();
   rmSync(clipsDir, { recursive: true, force: true });
+  rmSync(photosDir, { recursive: true, force: true });
 });
+
+/** Début d'un vrai fichier JPEG (signature FF D8 FF) : le serveur ne décode pas l'image. */
+const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("photo de chantier")]);
 
 /** Crée un compte et renvoie une fonction de requête authentifiée. */
 async function signUp(email: string) {
@@ -363,6 +370,85 @@ describe("API", () => {
       releaseLlm();
       flakyExtractor.gate = null;
     }
+  });
+
+  it("gère les photos : ajout, renvoi sans doublon, fichier, légende, suppression", async () => {
+    const api = await signUp("photos@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const clientPhotoId = "33333333-3333-4333-8333-333333333333";
+    const upload = (payload: Buffer, query = `clientPhotoId=${clientPhotoId}`, contentType = "image/jpeg") =>
+      app.inject({
+        method: "POST",
+        url: `/api/quotes/${quote.id}/photos?${query}`,
+        headers: { "content-type": contentType },
+        cookies: api.cookies,
+        payload,
+      });
+
+    const created = await upload(jpeg);
+    assert.equal(created.statusCode, 201, created.body);
+    const photo = created.json();
+    assert.equal(photo.mimeType, "image/jpeg");
+    assert.equal(photo.visibleToClient, false, "note interne par défaut");
+    assert.equal(photo.url, `/api/quotes/${quote.id}/photos/${photo.id}/file`);
+
+    // Renvoi de la même photo après une coupure : pas de doublon
+    const again = await upload(jpeg);
+    assert.equal(again.statusCode, 200);
+    assert.equal(again.json().id, photo.id);
+    assert.equal((await api("GET", `/api/quotes/${quote.id}`)).json().photos.length, 1);
+
+    // Fichier servi avec le bon type, identique à l'envoi
+    const file = await api("GET", photo.url);
+    assert.equal(file.statusCode, 200);
+    assert.equal(file.headers["content-type"], "image/jpeg");
+    assert.deepEqual(file.rawPayload, jpeg);
+
+    const updated = await api("PATCH", `/api/quotes/${quote.id}/photos/${photo.id}`, {
+      caption: "Porte gondolée",
+      visibleToClient: true,
+    });
+    assert.equal(updated.json().caption, "Porte gondolée");
+    assert.equal(updated.json().visibleToClient, true);
+
+    const removed = await api("DELETE", `/api/quotes/${quote.id}/photos/${photo.id}`);
+    assert.equal(removed.statusCode, 204);
+    assert.equal((await api("GET", `/api/quotes/${quote.id}/photos`)).json().length, 0);
+    assert.equal(readdirSync(photosDir).includes(`${photo.id}.jpg`), false, "fichier supprimé du disque");
+  });
+
+  it("refuse les photos invalides ou trop lourdes, les isole par artisan et les supprime avec le devis", async () => {
+    const api = await signUp("photos-refus@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const upload = (payload: Buffer, contentType = "image/jpeg") =>
+      app.inject({
+        method: "POST",
+        url: `/api/quotes/${quote.id}/photos`,
+        headers: { "content-type": contentType },
+        cookies: api.cookies,
+        payload,
+      });
+
+    // Un fichier qui n'est pas une image, même annoncé comme tel
+    let res = await upload(Buffer.from("<script>alert(1)</script>"));
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error, "invalid_image");
+
+    // Plus lourd que MAX_PHOTO_MB (1 Mo dans ces tests)
+    res = await upload(Buffer.concat([jpeg, Buffer.alloc(1024 * 1024)]));
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error, "photo_too_large");
+
+    // Un autre artisan ne voit ni la liste, ni les fichiers
+    const photo = (await upload(jpeg)).json();
+    const other = await signUp("photos-autre@test.fr");
+    assert.equal((await other("GET", `/api/quotes/${quote.id}/photos`)).statusCode, 404);
+    assert.equal((await other("GET", photo.url)).statusCode, 404);
+
+    // Supprimer le devis supprime aussi les fichiers des photos
+    assert.equal(existsSync(join(photosDir, `${photo.id}.jpg`)), true);
+    assert.equal((await api("DELETE", `/api/quotes/${quote.id}`)).statusCode, 204);
+    assert.equal(existsSync(join(photosDir, `${photo.id}.jpg`)), false);
   });
 
   it("refuse un audio invalide", async () => {

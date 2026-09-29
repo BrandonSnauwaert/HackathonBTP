@@ -17,6 +17,7 @@ import { HttpError, conflict } from "../http/errors.js";
 import { countLinesByClip, listClips, toClipView, type ClipView } from "../repositories/clips.js";
 import { createClient, getClient, type Client, type ClientInput } from "../repositories/clients.js";
 import { companyIssues, getCompany } from "../repositories/companies.js";
+import { listPhotos, toPhotoView, type PhotoView } from "../repositories/photos.js";
 import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
 import type { ExtractedLine } from "../llm/line-extractor.js";
@@ -27,6 +28,8 @@ export interface QuoteServiceOptions {
   followUpAfterDays: number;
   /** Dossier des fichiers audio des dictées (supprimés avec le devis). */
   clipsDir: string;
+  /** Dossier des photos (supprimées avec le devis). */
+  photosDir: string;
 }
 
 export type QuoteLineView = QuoteLine & { unitLabel: string; totalHtCents: number | null };
@@ -53,6 +56,7 @@ export interface QuoteDetail {
   issues: string[];
   allowedTransitions: QuoteStatus[];
   clips: ClipView[];
+  photos: PhotoView[];
   events: QuoteEvent[];
 }
 
@@ -181,6 +185,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       issues: isEditable(quote.status) ? readinessIssues(userId, client, lines) : [],
       allowedTransitions: allowedTransitions(quote.status, "artisan").filter((s) => MANUAL_STATUSES.includes(s)),
       clips: listClipViews(quote.id),
+      photos: listPhotos(db, quote.id).map(toPhotoView),
       events: repo.listEvents(db, quote.id),
     };
   }
@@ -259,12 +264,15 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
 
     async remove(userId: string, quoteId: string): Promise<void> {
       const quote = loadEditable(userId, quoteId);
-      const audioFiles = listClips(db, quote.id).map((c) => c.audioFile);
+      const files = [
+        ...listClips(db, quote.id).map((c) => join(options.clipsDir, c.audioFile)),
+        ...listPhotos(db, quote.id).map((p) => join(options.photosDir, p.file)),
+      ];
       repo.deleteQuote(db, quote.id);
-      await Promise.all(audioFiles.map((file) => rm(join(options.clipsDir, file), { force: true })));
+      await Promise.all(files.map((file) => rm(file, { force: true })));
     },
 
-    /** Vérifie qu'on peut encore ajouter une dictée à ce devis (brouillon ou prêt). */
+    /** Vérifie qu'on peut encore ajouter une dictée ou une photo à ce devis (brouillon ou prêt). */
     assertEditable(userId: string, quoteId: string): void {
       loadEditable(userId, quoteId);
     },

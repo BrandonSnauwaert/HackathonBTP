@@ -95,3 +95,25 @@ GET {{base}}/quotes/{{quoteId}}/clips/{{clipId}}/audio
 
 ### Relancer une dictée en échec (ex. LLM indisponible)
 POST {{base}}/quotes/{{quoteId}}/clips/{{clipId}}/retry
+
+### --- Photos ---
+
+### Ajouter une photo (JPEG, PNG ou WebP brut ; le front la réduit à 1600 px avant l'envoi)
+POST {{base}}/quotes/{{quoteId}}/photos?caption=Porte%20gondol%C3%A9e
+Content-Type: image/jpeg
+
+< ./samples/photo-chantier.jpg
+
+> {% client.global.set("photoId", response.body.id); %}
+
+### La rendre visible pour le client sur la page du devis
+PATCH {{base}}/quotes/{{quoteId}}/photos/{{photoId}}
+Content-Type: application/json
+
+{ "visibleToClient": true }
+
+### Voir l'image
+GET {{base}}/quotes/{{quoteId}}/photos/{{photoId}}/file
+
+### Supprimer la photo
+DELETE {{base}}/quotes/{{quoteId}}/photos/{{photoId}}

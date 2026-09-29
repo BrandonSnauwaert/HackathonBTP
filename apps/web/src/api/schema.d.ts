@@ -1598,6 +1598,334 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/quotes/{id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lister les photos d'un devis */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Photo"][];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Ajouter une photo de chantier
+         * @description Corps : l'image brute (JPEG, PNG ou WebP) avec son `Content-Type`. Le type est vérifié sur le contenu du fichier. Réduire la photo sur le téléphone avant l'envoi (ex. 1600 px de large).
+         *
+         *     Hors connexion : générer un `clientPhotoId` (UUID) sur le téléphone. Un renvoi de la même photo renvoie la photo existante (200) au lieu d'en créer une seconde.
+         */
+        post: {
+            parameters: {
+                query?: {
+                    /** @description Identifiant de la photo généré par le téléphone */
+                    clientPhotoId?: string;
+                    /** @description Date de la prise de vue (ISO 8601) */
+                    takenAt?: string;
+                    /** @description Légende */
+                    caption?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Photo déjà reçue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Photo"];
+                    };
+                };
+                /** @description Photo ajoutée */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Photo"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quotes/{id}/photos/{photoId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fichier image d'une photo */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    photoId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quotes/{id}/photos/{photoId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Supprimer une photo */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    photoId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Supprimée */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": null;
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Modifier la légende ou la visibilité pour le client */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    photoId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoUpdateInput"];
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Photo"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1678,6 +2006,10 @@ export interface components {
             unitPriceCents?: number | null;
             /** @description Taux de TVA en points de base : 2000 = 20 %, 1000 = 10 %, 550 = 5,5 %, 0 */
             vatRateBp?: 2000 | 1000 | 550 | 0;
+        };
+        PhotoUpdateInput: {
+            caption?: string;
+            visibleToClient?: boolean;
         };
         QuoteCreateInput: {
             /**
@@ -1854,6 +2186,27 @@ export interface components {
             /** @description Date ISO 8601 */
             updatedAt: string;
         };
+        Photo: {
+            /** Format: uuid */
+            id: string;
+            /** @description Identifiant généré par le téléphone */
+            clientPhotoId: string | null;
+            /** @description image/jpeg, image/png ou image/webp */
+            mimeType: string;
+            sizeBytes: number;
+            /** @description Légende libre */
+            caption: string;
+            /** @description Affichée au client sur la page du devis ; sinon note interne de l'artisan (par défaut) */
+            visibleToClient: boolean;
+            /** @description Date de la prise de vue */
+            takenAt: string;
+            /** @description URL du fichier image (même origine, cookie de session requis) */
+            url: string;
+            /** @description Date ISO 8601 */
+            createdAt: string;
+            /** @description Date ISO 8601 */
+            updatedAt: string;
+        };
         QuoteTotals: {
             /** @description Total HT (centimes) */
             totalHtCents: number;
@@ -1909,6 +2262,8 @@ export interface components {
             allowedTransitions: components["schemas"]["QuoteStatus"][];
             /** @description Dictées du devis et leur état de traitement */
             clips: components["schemas"]["Clip"][];
+            /** @description Photos de chantier du devis */
+            photos: components["schemas"]["Photo"][];
             events: components["schemas"]["QuoteEvent"][];
         };
         QuoteSummary: {

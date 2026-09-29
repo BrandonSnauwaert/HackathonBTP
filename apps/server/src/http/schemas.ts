@@ -152,6 +152,28 @@ export const ClipSchema = z
   })
   .meta({ id: "Clip" });
 
+export const PhotoSchema = z
+  .object({
+    id: z.uuid(),
+    clientPhotoId: z.string().nullable().describe("Identifiant généré par le téléphone"),
+    mimeType: z.string().describe("image/jpeg, image/png ou image/webp"),
+    sizeBytes: z.number().int(),
+    caption: z.string().describe("Légende libre"),
+    visibleToClient: z
+      .boolean()
+      .describe("Affichée au client sur la page du devis ; sinon note interne de l'artisan (par défaut)"),
+    takenAt: isoDate.describe("Date de la prise de vue"),
+    url: z.string().describe("URL du fichier image (même origine, cookie de session requis)"),
+    createdAt: isoDate,
+    updatedAt: isoDate,
+  })
+  .meta({ id: "Photo" });
+
+export const PhotoUpdateSchema = z
+  .object({ caption: z.string().max(500), visibleToClient: z.boolean() })
+  .partial()
+  .meta({ id: "PhotoUpdate" });
+
 export const QuoteTotalsSchema = z
   .object({
     totalHtCents: cents("Total HT"),
@@ -189,6 +211,7 @@ export const QuoteDetailSchema = z
     issues: z.array(z.string()).describe("Ce qui manque pour passer le devis en « prêt » (vide = complet)"),
     allowedTransitions: z.array(QuoteStatusSchema).describe("Statuts que l'artisan peut poser via POST /status"),
     clips: z.array(ClipSchema).describe("Dictées du devis et leur état de traitement"),
+    photos: z.array(PhotoSchema).describe("Photos de chantier du devis"),
     events: z.array(QuoteEventSchema),
   })
   .meta({ id: "QuoteDetail" });

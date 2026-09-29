@@ -25,18 +25,35 @@ export const DEMO_EMAIL = "demo@artisan.test";
 export const DEMO_PASSWORD = "demo1234";
 
 const db = openDatabase(config.DATABASE_PATH);
-const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS, clipsDir: config.CLIPS_DIR });
+const quotes = createQuoteService(db, {
+  followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
+  clipsDir: config.CLIPS_DIR,
+  photosDir: config.PHOTOS_DIR,
+});
 
 const existing = findUserByEmail(db, DEMO_EMAIL);
 if (existing) {
-  // Les fichiers audio des dictées ne sont pas supprimés par la cascade SQL.
-  const audioFiles = queryAll(
-    db,
-    z.object({ audio_file: z.string() }),
-    "SELECT c.audio_file FROM clips c JOIN quotes q ON q.id = c.quote_id WHERE q.user_id = :id",
-    { id: existing.id },
-  );
-  await Promise.all(audioFiles.map((f) => rm(join(config.CLIPS_DIR, f.audio_file), { force: true })));
+  // Les fichiers (audio des dictées, photos) ne sont pas supprimés par la cascade SQL.
+  const File = z.object({ path: z.string() });
+  const files = [
+    ...queryAll(
+      db,
+      File,
+      "SELECT c.audio_file AS path FROM clips c JOIN quotes q ON q.id = c.quote_id WHERE q.user_id = :id",
+      {
+        id: existing.id,
+      },
+    ).map((f) => join(config.CLIPS_DIR, f.path)),
+    ...queryAll(
+      db,
+      File,
+      "SELECT p.file AS path FROM photos p JOIN quotes q ON q.id = p.quote_id WHERE q.user_id = :id",
+      {
+        id: existing.id,
+      },
+    ).map((f) => join(config.PHOTOS_DIR, f.path)),
+  ];
+  await Promise.all(files.map((file) => rm(file, { force: true })));
   execute(db, "DELETE FROM users WHERE id = :id", { id: existing.id });
 }
 

@@ -130,6 +130,25 @@ const MIGRATIONS: readonly string[] = [
 
   ALTER TABLE quote_lines ADD COLUMN clip_id TEXT REFERENCES clips(id) ON DELETE SET NULL;
   `,
+  `
+  -- Photos de chantier jointes à un devis (fichiers dans PHOTOS_DIR).
+  CREATE TABLE photos (
+    id                TEXT PRIMARY KEY,
+    quote_id          TEXT NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+    -- Identifiant généré par le téléphone : une photo renvoyée après une coupure n'est pas dupliquée.
+    client_photo_id   TEXT,
+    file              TEXT NOT NULL,
+    mime_type         TEXT NOT NULL,
+    size_bytes        INTEGER NOT NULL,
+    caption           TEXT NOT NULL DEFAULT '',
+    visible_to_client INTEGER NOT NULL DEFAULT 0,
+    taken_at          TEXT NOT NULL,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL,
+    UNIQUE (quote_id, client_photo_id)
+  );
+  CREATE INDEX photos_quote_id ON photos(quote_id);
+  `,
 ];
 
 export function openDatabase(path: string): Database {

@@ -18,6 +18,10 @@ const EnvSchema = z
     CLIPS_DIR: z.string().default("data/clips"),
     MAX_CLIP_SECONDS: z.coerce.number().int().positive().default(300),
 
+    // Photos
+    PHOTOS_DIR: z.string().default("data/photos"),
+    MAX_PHOTO_MB: z.coerce.number().positive().default(10),
+
     // Transcription
     TRANSCRIBER: z.enum(["mock", "kyutai"]).default("mock"),
     KYUTAI_URL: z.string().url().default("ws://localhost:8080/api/asr-streaming"),

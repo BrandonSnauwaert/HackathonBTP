@@ -12,6 +12,7 @@ import {
   parseEuros,
 } from "../format";
 import { HoldToTalkButton } from "./HoldToTalkButton";
+import { PhotoSection } from "./PhotoSection";
 
 const TRANSITION_LABELS: Partial<Record<QuoteStatus, string>> = {
   draft: "Repasser en brouillon",
@@ -182,6 +183,8 @@ export function QuoteView({ quoteId, onChanged }: { quoteId: string; onChanged: 
         <p className="muted">{quote.totals.unpricedLineCount} ligne(s) sans prix : totaux partiels.</p>
       )}
       {quote.totals.vatMention && <p className="muted">{quote.totals.vatMention}</p>}
+
+      <PhotoSection quoteId={quote.id} photos={quote.photos} editable={editable} onChanged={() => void load()} />
 
       <h3>Dictées</h3>
       {quote.clips.length === 0 && uploads.length === 0 && <p className="muted">Aucune dictée pour ce devis.</p>}

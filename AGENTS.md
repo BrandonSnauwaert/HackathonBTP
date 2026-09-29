@@ -22,6 +22,7 @@ apps/server/            API Node.js (Fastify, TypeScript)
   src/transcription/    interface Transcriber, mock, Kyutai, transcription d'un clip complet
   src/llm/              interface LlmClient, client compatible OpenAI, extraction des lignes de devis (prompt)
   src/audio/            format audio interne (PCM s16le mono 24 kHz), lecture / écriture WAV
+  src/images/           reconnaissance du type d'image (JPEG, PNG, WebP) par son contenu
   scripts/              seed de démo, clients de test (WebSocket, navigateur headless)
   samples/              audio de test (chantier-fr.wav)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
@@ -30,6 +31,7 @@ apps/web/               PWA React (Vite, TypeScript) — pour l'instant des page
   public/pcm-recorder-worklet.js   capture micro vers PCM 24 kHz
   src/api/              client de l'API ; schema.d.ts = types générés depuis openapi.json
   src/audio/            micro (AudioWorklet), enregistrement talkie-walkie (useClipRecorder), encodage WAV
+  src/images/           réduction des photos sur l'appareil avant l'envoi (1600 px, JPEG)
   src/test-console/     page de test « Devis & dictées » : connexion, devis, lignes, dictées
   src/live/             page de test « Transcription live » (WebSocket)
 services/kyutai-stt/    image Docker moshi-server + config du modèle STT
@@ -49,6 +51,7 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] API REST des devis : CRUD, lignes, statuts, calcul HT / TVA / TTC, points manquants, doc OpenAPI sur `/docs`
 - [x] Dictées : dépôt d'un clip WAV, file de traitement (Kyutai puis LLM), lignes ajoutées au devis, relance, reprise au redémarrage
 - [x] Client LLM compatible OpenAI et extraction des lignes (JSON validé par zod, seconde tentative si invalide)
+- [x] Photos de chantier : ajout (renvoi sans doublon), légende, visibilité client, suppression ; réduites sur l'appareil
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [ ] Front définitif : liste des devis, écran d'édition (en attente des maquettes UI/UX)
@@ -134,6 +137,8 @@ cd apps/web; npm run dev
 - Un devis n'est **modifiable** qu'en `draft` ou `ready`. Une modification repasse un devis `ready` en `draft`.
 
 Pour **ajouter une route** : schémas zod dans `src/http/schemas.ts` (avec `.meta({ id })` pour les objets réutilisés, et `.describe()` sur les champs), puis route dans `src/routes/`, avec `tags`, `summary`, `security: cookieAuth` et les réponses d'erreur. La doc se met à jour toute seule.
+
+**Photos** : `POST /api/quotes/:id/photos`, corps image brut (JPEG, PNG ou WebP, avec son `Content-Type`), `clientPhotoId` pour un renvoi sans doublon, `takenAt`, `caption`. Le type est **vérifié sur le contenu du fichier** (pas sur le `Content-Type`). Taille maximale `MAX_PHOTO_MB` (10 Mo). Le front **réduit les photos à 1600 px avant l'envoi** (`apps/web/src/images/resizeImage.ts`). `visibleToClient` vaut `false` par défaut : la photo est une note interne tant que l'artisan ne la partage pas. Fichiers dans `PHOTOS_DIR`, supprimés avec la photo ou avec le devis.
 
 **Interface de transcription**, dans `apps/server/src/transcription/transcriber.ts`. Tout fournisseur la respecte, et il est choisi par la variable `TRANSCRIBER` :
 ```ts

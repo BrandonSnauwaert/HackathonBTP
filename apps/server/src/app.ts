@@ -20,11 +20,13 @@ import { createLineExtractor } from "./llm/create-line-extractor.js";
 import type { LineExtractor } from "./llm/line-extractor.js";
 import { authRoutes } from "./routes/auth.js";
 import { clipRoutes } from "./routes/clips.js";
+import { photoRoutes } from "./routes/photos.js";
 import { clientRoutes } from "./routes/clients.js";
 import { companyRoutes } from "./routes/company.js";
 import { quoteRoutes } from "./routes/quotes.js";
 import { transcriptionRoutes } from "./routes/transcription.js";
 import { createClipService } from "./services/clip-service.js";
+import { createPhotoService } from "./services/photo-service.js";
 import { createQuoteService } from "./services/quote-service.js";
 import { createTranscriber } from "./transcription/create-transcriber.js";
 
@@ -86,6 +88,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
           name: "Dictées",
           description: "Clips audio talkie-walkie : transcription puis extraction des lignes par le LLM",
         },
+        { name: "Photos", description: "Photos de chantier jointes au devis" },
         { name: "Système" },
       ],
       components: {
@@ -119,7 +122,11 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
     }),
   );
 
-  const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS, clipsDir: config.CLIPS_DIR });
+  const quotes = createQuoteService(db, {
+    followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
+    clipsDir: config.CLIPS_DIR,
+    photosDir: config.PHOTOS_DIR,
+  });
   const clips = createClipService({
     db,
     quotes,
@@ -142,6 +149,9 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
   // WAV PCM 16 bits 24 kHz ≈ 2,9 Mo par minute, plus de la marge pour les fréquences plus élevées.
   const maxUploadBytes = Math.ceil(config.MAX_CLIP_SECONDS / 60) * 12 * 1024 * 1024;
   await app.register(clipRoutes, { prefix: "/api/quotes", clips, maxUploadBytes });
+  const maxPhotoBytes = Math.round(config.MAX_PHOTO_MB * 1024 * 1024);
+  const photos = createPhotoService({ db, quotes, photosDir: config.PHOTOS_DIR, maxPhotoBytes });
+  await app.register(photoRoutes, { prefix: "/api/quotes", photos, maxPhotoBytes });
   await app.register(transcriptionRoutes, { config });
 
   return app;

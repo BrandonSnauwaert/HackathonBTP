@@ -1,4 +1,4 @@
-import type { ApiErrorBody, Clip, QuoteDetail, QuoteStatus, QuoteSummary, User } from "./types";
+import type { ApiErrorBody, Clip, Photo, QuoteDetail, QuoteStatus, QuoteSummary, User } from "./types";
 
 /** Erreur renvoyée par l'API : `code` est stable, `message` est affichable tel quel. */
 export class ApiError extends Error {
@@ -25,7 +25,8 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
 async function request<T>(method: string, path: string, body?: object | Blob): Promise<T> {
   const init: RequestInit = { method, credentials: "same-origin" };
   if (body instanceof Blob) {
-    init.headers = { "Content-Type": "audio/wav" };
+    // Fichier brut (dictée WAV, photo) : envoyé avec son propre type.
+    init.headers = { "Content-Type": body.type || "application/octet-stream" };
     init.body = body;
   } else if (body !== undefined) {
     init.headers = { "Content-Type": "application/json" };
@@ -71,4 +72,14 @@ export const api = {
     ),
   retryClip: (quoteId: string, clipId: string) => request<Clip>("POST", `/quotes/${quoteId}/clips/${clipId}/retry`),
   clipAudioUrl: (quoteId: string, clipId: string) => `/api/quotes/${quoteId}/clips/${clipId}/audio`,
+
+  uploadPhoto: (quoteId: string, image: Blob, clientPhotoId: string, takenAt: Date) =>
+    request<Photo>(
+      "POST",
+      `/quotes/${quoteId}/photos?clientPhotoId=${clientPhotoId}&takenAt=${encodeURIComponent(takenAt.toISOString())}`,
+      image,
+    ),
+  updatePhoto: (quoteId: string, photoId: string, update: { caption?: string; visibleToClient?: boolean }) =>
+    request<Photo>("PATCH", `/quotes/${quoteId}/photos/${photoId}`, update),
+  deletePhoto: (quoteId: string, photoId: string) => request<null>("DELETE", `/quotes/${quoteId}/photos/${photoId}`),
 };
