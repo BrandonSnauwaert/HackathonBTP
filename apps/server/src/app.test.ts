@@ -16,10 +16,14 @@ const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
 const config = parseConfig({ DATABASE_PATH: ":memory:", CLIPS_DIR: clipsDir, TRANSCRIBER: "mock", LLM_PROVIDER: "mock" });
 const sampleWav = readFileSync(new URL("../samples/chantier-fr.wav", import.meta.url));
 
-/** Extracteur de test : échoue tant que `failNext` est vrai, sinon délègue au mock. */
-const flakyExtractor: LineExtractor & { failNext: boolean } = {
+/**
+ * Extracteur de test : échoue si `failNext`, attend `gate` s'il est posé (LLM lent), sinon délègue au mock.
+ */
+const flakyExtractor: LineExtractor & { failNext: boolean; gate: Promise<void> | null } = {
   failNext: false,
+  gate: null,
   async extract(input) {
+    if (this.gate) await this.gate;
     if (this.failNext) {
       this.failNext = false;
       throw new Error("LLM indisponible");
@@ -301,6 +305,50 @@ describe("API", () => {
 
     const again = await api("POST", `/api/quotes/${quote.id}/clips/${failed.id}/retry`);
     assert.equal(again.statusCode, 409, "une dictée traitée ne se relance pas");
+  });
+
+  it("enchaîne les transcriptions sans attendre le LLM, en gardant l'ordre des dictées", async () => {
+    const api = await signUp("pipeline@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const upload = (clientClipId: string) =>
+      app.inject({
+        method: "POST",
+        url: `/api/quotes/${quote.id}/clips?clientClipId=${clientClipId}`,
+        headers: { "content-type": "audio/wav" },
+        cookies: api.cookies,
+        payload: sampleWav,
+      });
+    const clip = async (id: string) => (await api("GET", `/api/quotes/${quote.id}/clips/${id}`)).json();
+    const until = async (check: () => Promise<boolean>) => {
+      for (let i = 0; i < 100 && !(await check()); i++) await new Promise((r) => setTimeout(r, 20));
+    };
+
+    let releaseLlm = () => {};
+    flakyExtractor.gate = new Promise((resolve) => (releaseLlm = resolve));
+    try {
+      const first = (await upload("11111111-1111-4111-8111-111111111111")).json();
+      const second = (await upload("22222222-2222-4222-8222-222222222222")).json();
+
+      // Le LLM est bloqué sur la 1re dictée : la 2e doit quand même être transcrite.
+      await until(async () => (await clip(second.id)).status === "transcribed");
+      assert.equal((await clip(second.id)).status, "transcribed");
+      assert.ok((await clip(second.id)).transcript);
+      assert.equal((await clip(first.id)).status, "extracting");
+
+      releaseLlm();
+      flakyExtractor.gate = null;
+      await until(async () => (await clip(second.id)).status === "done");
+
+      const lines = (await api("GET", `/api/quotes/${quote.id}`)).json().lines as { clipId: string }[];
+      assert.deepEqual(
+        lines.map((l) => l.clipId),
+        [first.id, second.id],
+        "les lignes suivent l'ordre des dictées",
+      );
+    } finally {
+      releaseLlm();
+      flakyExtractor.gate = null;
+    }
   });
 
   it("refuse un audio invalide", async () => {

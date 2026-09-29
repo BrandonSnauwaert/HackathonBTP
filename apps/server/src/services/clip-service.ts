@@ -46,12 +46,16 @@ const MIN_CLIP_MS = 300;
 const isFinished = (clip: Clip) => clip.status === "done" || clip.status === "failed";
 
 /**
- * Dictées audio : dépôt, puis traitement en tâche de fond, un clip à la fois
- * (transcription Kyutai → extraction des lignes par le LLM → ajout au devis).
+ * Dictées audio : dépôt, puis traitement en tâche de fond, en deux files :
+ * - transcription (Kyutai, GPU local) : un clip à la fois, sans attendre le LLM ;
+ * - analyse (LLM, sur une autre machine) : dès qu'une transcription est prête. Pour un même
+ *   devis, les analyses restent dans l'ordre des dictées (ordre des lignes, et chaque analyse
+ *   voit les lignes des précédentes pour éviter les doublons) ; deux devis s'analysent en parallèle.
  */
 export function createClipService(deps: ClipServiceDeps) {
   const { db, quotes, clipsDir, logger } = deps;
-  let queue: Promise<void> = Promise.resolve();
+  let transcriptionQueue: Promise<void> = Promise.resolve();
+  const analysisQueues = new Map<string, Promise<void>>();
   const listeners = new Map<string, Set<() => void>>();
 
   function view(clip: Clip): ClipView {
@@ -63,23 +67,51 @@ export function createClipService(deps: ClipServiceDeps) {
     listeners.delete(clipId);
   }
 
-  async function process(clipId: string): Promise<void> {
+  function fail(clipId: string, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    updateClip(db, clipId, { status: "failed", error: message });
+    logger.error({ err, clipId }, "échec du traitement de la dictée");
+    notify(clipId);
+  }
+
+  /** Étape 1 (file de transcription) : audio → texte, puis passe la main à l'analyse. */
+  async function transcribe(clipId: string): Promise<void> {
+    const clip = findClipById(db, clipId);
+    if (!clip || isFinished(clip)) return;
+    try {
+      updateClip(db, clipId, { status: "transcribing", attempts: clip.attempts + 1, error: null });
+      const pcm = wavToPcm16(await readFile(join(clipsDir, clip.audioFile)));
+      const transcript = await transcribeAudio(deps.createTranscriber(), pcm);
+      updateClip(db, clipId, { status: "transcribed", transcript });
+    } catch (err) {
+      fail(clipId, err);
+      return;
+    }
+    scheduleAnalysis(clip.quoteId, clipId);
+  }
+
+  function scheduleAnalysis(quoteId: string, clipId: string): void {
+    const previous = analysisQueues.get(quoteId) ?? Promise.resolve();
+    const next = previous.then(() => analyze(clipId));
+    analysisQueues.set(quoteId, next);
+    // Libère l'entrée quand la file du devis est vide.
+    void next.then(() => {
+      if (analysisQueues.get(quoteId) === next) analysisQueues.delete(quoteId);
+    });
+  }
+
+  /** Étape 2 (file d'analyse du devis) : texte → lignes de devis par le LLM. */
+  async function analyze(clipId: string): Promise<void> {
     const clip = findClipById(db, clipId);
     const userId = findClipOwner(db, clipId);
-    if (!clip || !userId || isFinished(clip)) return;
+    if (!clip || !userId || isFinished(clip) || clip.transcript === null) return;
+    const transcript = clip.transcript;
 
     try {
-      let transcript = clip.transcript;
-      if (transcript === null) {
-        updateClip(db, clipId, { status: "transcribing", attempts: clip.attempts + 1, error: null });
-        const pcm = wavToPcm16(await readFile(join(clipsDir, clip.audioFile)));
-        transcript = await transcribeAudio(deps.createTranscriber(), pcm);
-        updateClip(db, clipId, { transcript });
-      }
-
-      updateClip(db, clipId, { status: "extracting" });
+      updateClip(db, clipId, { status: "extracting", error: null });
       if (!transcript.trim()) {
         updateClip(db, clipId, { status: "done", warnings: ["Aucune parole détectée dans l'enregistrement"] });
+        notify(clipId);
         return;
       }
       const result = await deps.extractor.extract({
@@ -95,17 +127,21 @@ export function createClipService(deps: ClipServiceDeps) {
       const warnings = result.lines.length === 0 ? ["Aucune prestation détectée dans la dictée", ...result.warnings] : result.warnings;
       updateClip(db, clipId, { status: "done", warnings });
       logger.info({ clipId, lines: result.lines.length }, "dictée traitée");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      updateClip(db, clipId, { status: "failed", error: message });
-      logger.error({ err, clipId }, "échec du traitement de la dictée");
-    } finally {
       notify(clipId);
+    } catch (err) {
+      fail(clipId, err);
     }
   }
 
+  /** Met un clip en file : transcription s'il n'a pas encore de texte, sinon directement l'analyse. */
   function enqueue(clipId: string): void {
-    queue = queue.then(() => process(clipId));
+    const clip = findClipById(db, clipId);
+    if (!clip) return;
+    if (clip.transcript === null) {
+      transcriptionQueue = transcriptionQueue.then(() => transcribe(clipId));
+    } else {
+      scheduleAnalysis(clip.quoteId, clipId);
+    }
   }
 
   /** Se résout quand le clip est traité (ou en échec), ou au bout du délai. */

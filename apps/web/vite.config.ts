@@ -5,8 +5,10 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Le WebSocket passe par Vite : même origine que la page, pas de souci de CORS ni d'URL en dur.
+    // API, doc et WebSocket passent par Vite : même origine que la page (cookie de session, pas de CORS).
     proxy: {
+      '/api': 'http://localhost:3000',
+      '/docs': 'http://localhost:3000',
       '/ws': { target: 'ws://localhost:3000', ws: true },
     },
   },

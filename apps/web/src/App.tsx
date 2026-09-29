@@ -1,65 +1,27 @@
-import { useEffect, useRef, type CSSProperties } from "react";
-import { useTranscription, type Status } from "./useTranscription";
+import { useState } from "react";
+import LiveTranscription from "./live/LiveTranscription";
+import TestConsole from "./test-console/TestConsole";
 
-const STATUS_LABEL: Record<Status, string> = {
-  idle: "Prêt",
-  connecting: "Connexion…",
-  recording: "En écoute",
-  error: "Erreur",
-};
+type Tab = "quotes" | "live";
 
-const timeFormat = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
+/** Pages de test (en attendant les maquettes UI/UX). */
 export default function App() {
-  const { status, error, segments, partial, level, start, stop, clear } = useTranscription();
-  const endRef = useRef<HTMLDivElement>(null);
-  const recording = status === "recording";
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [segments, partial]);
+  const [tab, setTab] = useState<Tab>("quotes");
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>Notes de chantier</h1>
-        <span className={`status status-${status}`}>{STATUS_LABEL[status]}</span>
-      </header>
-
-      <main className="transcript">
-        {segments.length === 0 && !partial && (
-          <p className="empty">
-            {recording ? "Parlez, la transcription s'affiche ici." : "Appuyez sur le micro pour démarrer la visite."}
-          </p>
-        )}
-        {segments.map((segment) => (
-          <p key={segment.id} className="segment">
-            <time>{timeFormat.format(segment.at)}</time>
-            {segment.text}
-          </p>
-        ))}
-        {partial && <p className="segment partial">{partial}</p>}
-        <div ref={endRef} />
-      </main>
-
-      <footer className="controls">
-        {error && <p className="error">{error}</p>}
-        <div className="buttons">
-          <button className="secondary" onClick={clear} disabled={segments.length === 0}>
-            Effacer
-          </button>
-          <button
-            className={`mic ${recording ? "mic-on" : ""}`}
-            onClick={recording ? stop : start}
-            disabled={status === "connecting"}
-            aria-label={recording ? "Arrêter l'enregistrement" : "Démarrer l'enregistrement"}
-            style={{ "--level": Math.min(1, level * 6) } as CSSProperties}
-          >
-            {recording ? "■" : "●"}
-          </button>
-          <span className="spacer" />
-        </div>
-      </footer>
-    </div>
+    <>
+      <nav className="tabs">
+        <button className={tab === "quotes" ? "active" : ""} onClick={() => setTab("quotes")}>
+          Devis &amp; dictées
+        </button>
+        <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>
+          Transcription live
+        </button>
+        <a href="/docs" target="_blank" rel="noreferrer">
+          Doc API ↗
+        </a>
+      </nav>
+      {tab === "quotes" ? <TestConsole /> : <LiveTranscription />}
+    </>
   );
 }

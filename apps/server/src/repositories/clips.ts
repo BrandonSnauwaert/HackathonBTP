@@ -3,12 +3,13 @@ import { buildSet, execute, queryAll, queryOne, type Database } from "../db/data
 import { notFound } from "../http/errors.js";
 import type { PatchOf } from "../types.js";
 
-export const CLIP_STATUSES = ["pending", "transcribing", "extracting", "done", "failed"] as const;
+export const CLIP_STATUSES = ["pending", "transcribing", "transcribed", "extracting", "done", "failed"] as const;
 export type ClipStatus = (typeof CLIP_STATUSES)[number];
 
 export const CLIP_STATUS_LABELS: Record<ClipStatus, string> = {
   pending: "En attente",
   transcribing: "Transcription en cours",
+  transcribed: "Transcrit, analyse en attente",
   extracting: "Analyse en cours",
   done: "Traité",
   failed: "Échec",
@@ -95,7 +96,7 @@ export function listUnfinishedClipIds(db: Database): string[] {
   return queryAll(
     db,
     z.object({ id: z.string() }),
-    "SELECT id FROM clips WHERE status IN ('pending', 'transcribing', 'extracting') ORDER BY created_at",
+    "SELECT id FROM clips WHERE status IN ('pending', 'transcribing', 'transcribed', 'extracting') ORDER BY created_at",
   ).map((r) => r.id);
 }
 

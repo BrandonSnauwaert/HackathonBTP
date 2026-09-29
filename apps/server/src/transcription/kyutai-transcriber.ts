@@ -2,6 +2,7 @@ import { decode, encode } from "@msgpack/msgpack";
 import WebSocket, { type RawData } from "ws";
 import { z } from "zod";
 import { FRAME_SAMPLES, pcm16ToFloat32 } from "../audio/audio-format.js";
+import { SentenceAssembler } from "./sentence-assembler.js";
 import type { Transcriber, TranscriptEvent } from "./transcriber.js";
 
 /**
@@ -41,15 +42,6 @@ export interface KyutaiTranscriberOptions {
   logger: Logger;
 }
 
-/** Un mot qui termine une phrase (Kyutai produit la ponctuation). */
-const SENTENCE_END = /[.?!…]["»)]?$/;
-
-/**
- * Retard du texte sur l'audio, en steps de 80 ms : asr_delay_in_tokens = 6 dans
- * la config moshi-server (0,5 s), plus une petite marge.
- */
-const TEXT_DELAY_STEPS = 8;
-
 /**
  * Messages mis en attente tant que la connexion à Kyutai n'est pas ouverte.
  * Large, car un clip entier peut être envoyé d'un coup (≈ 5 octets par échantillon en msgpack).
@@ -58,6 +50,12 @@ const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 
 /** Silence envoyé après un marqueur pour faire avancer le modèle jusqu'à lui (trame de 80 ms). */
 const SILENCE_FRAME: readonly number[] = new Array<number>(FRAME_SAMPLES).fill(0);
+/**
+ * Silence ajouté AVANT le marqueur de fin : Kyutai n'émet le dernier mot qu'après avoir « entendu »
+ * un peu de silence derrière. Sans lui, un clip qui s'arrête juste après la parole perd son dernier
+ * mot (constaté sur de vraies dictées ; le script officiel de Kyutai en envoie aussi). ~1,5 s.
+ */
+const TRAILING_SILENCE_FRAMES = 19;
 /** Cadence d'envoi du silence : 80 ms d'audio toutes les 20 ms, soit 4× le temps réel. */
 const SILENCE_INTERVAL_MS = 20;
 const FLUSH_TIMEOUT_MS = 60_000;
@@ -65,11 +63,8 @@ const FLUSH_TIMEOUT_MS = 60_000;
 /**
  * Transcriber branché sur moshi-server (Kyutai STT).
  *
- * Kyutai renvoie les mots un par un, sans notion de segment partiel/définitif.
- * On reconstruit donc des phrases : chaque nouveau mot émet la phrase en cours
- * (isFinal=false). La phrase est émise en définitif (isFinal=true) puis
- * réinitialisée dès qu'un mot se termine par une ponctuation finale, ou quand le
- * VAD sémantique détecte une pause.
+ * Kyutai renvoie les mots un par un, sans notion de segment partiel/définitif :
+ * SentenceAssembler reconstitue les phrases (cf. sentence-assembler.ts).
  */
 export class KyutaiTranscriber implements Transcriber {
   private readonly ws: WebSocket;
@@ -79,12 +74,16 @@ export class KyutaiTranscriber implements Transcriber {
   private lastMarkerId = 0;
   /** flush() en attente, par identifiant de marqueur. */
   private readonly markerWaiters = new Map<number, { resolve: () => void; reject: (err: Error) => void }>();
-  private words: string[] = [];
-  /** Step à partir duquel clore la phrase en cours, après une pause détectée. */
-  private flushAtStep: number | null = null;
+  private readonly sentences: SentenceAssembler;
   private closed = false;
 
   constructor(private readonly options: KyutaiTranscriberOptions) {
+    this.sentences = new SentenceAssembler({
+      pauseThreshold: options.pauseThreshold,
+      emit: (event) => {
+        for (const callback of this.callbacks) callback(event);
+      },
+    });
     this.ws = new WebSocket(options.url, { headers: { "kyutai-api-key": options.apiKey } });
 
     this.ws.on("open", () => {
@@ -138,7 +137,7 @@ export class KyutaiTranscriber implements Transcriber {
       this.markerWaiters.set(id, {
         resolve: () => {
           done();
-          this.flushSentence();
+          this.sentences.flush();
           resolve();
         },
         reject: (err) => {
@@ -146,6 +145,7 @@ export class KyutaiTranscriber implements Transcriber {
           reject(err);
         },
       });
+      for (let i = 0; i < TRAILING_SILENCE_FRAMES; i++) this.send({ type: "Audio", pcm: SILENCE_FRAME });
       this.send({ type: "Marker", id });
     });
   }
@@ -156,7 +156,7 @@ export class KyutaiTranscriber implements Transcriber {
 
   close(): void {
     if (this.closed) return;
-    this.flushSentence();
+    this.sentences.flush();
     this.closed = true;
     this.callbacks.length = 0;
     this.queue = [];
@@ -195,25 +195,11 @@ export class KyutaiTranscriber implements Transcriber {
 
     switch (message.type) {
       case "Word":
-        this.words.push(message.text);
-        if (SENTENCE_END.test(message.text)) {
-          this.flushSentence();
-        } else {
-          this.emit({ text: this.words.join(" "), isFinal: false });
-        }
+        this.sentences.onWord(message.text);
         break;
-      case "Step": {
-        if (this.flushAtStep !== null && message.step_idx >= this.flushAtStep) {
-          this.flushSentence();
-        }
-        const pause = message.prs[this.options.pauseHeadIndex] ?? 0;
-        if (pause > this.options.pauseThreshold && this.words.length > 0 && this.flushAtStep === null) {
-          // Le VAD voit la pause sur l'audio, mais le texte a ~0,5 s de retard :
-          // on attend que les derniers mots arrivent avant de clore la phrase.
-          this.flushAtStep = message.step_idx + TEXT_DELAY_STEPS;
-        }
+      case "Step":
+        this.sentences.onStep(message.step_idx, message.prs[this.options.pauseHeadIndex] ?? 0);
         break;
-      }
       case "Error":
         this.options.logger.error({ message: message.message }, "erreur renvoyée par Kyutai STT");
         break;
@@ -224,17 +210,5 @@ export class KyutaiTranscriber implements Transcriber {
       case "Ready":
         break;
     }
-  }
-
-  private flushSentence(): void {
-    this.flushAtStep = null;
-    if (this.words.length === 0) return;
-    const text = this.words.join(" ");
-    this.words = [];
-    this.emit({ text, isFinal: true });
-  }
-
-  private emit(event: TranscriptEvent): void {
-    for (const callback of this.callbacks) callback(event);
   }
 }

@@ -1,0 +1,74 @@
+import type { ApiErrorBody, Clip, QuoteDetail, QuoteStatus, QuoteSummary, User } from "./types";
+
+/** Erreur renvoyée par l'API : `code` est stable, `message` est affichable tel quel. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly details: unknown;
+
+  constructor(status: number, body: ApiErrorBody) {
+    super(body.message);
+    this.status = status;
+    this.code = body.error;
+    this.details = body.details;
+  }
+}
+
+function isErrorBody(value: unknown): value is ApiErrorBody {
+  return typeof value === "object" && value !== null && "error" in value && "message" in value;
+}
+
+/**
+ * Appel à l'API (même origine, via le proxy Vite) ; le cookie de session suit automatiquement.
+ * Le type de retour est celui documenté par l'API, sans validation à l'exécution.
+ */
+async function request<T>(method: string, path: string, body?: object | Blob): Promise<T> {
+  const init: RequestInit = { method, credentials: "same-origin" };
+  if (body instanceof Blob) {
+    init.headers = { "Content-Type": "audio/wav" };
+    init.body = body;
+  } else if (body !== undefined) {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify(body);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, init);
+  } catch {
+    throw new ApiError(0, { error: "network", message: "Serveur injoignable" });
+  }
+  const data: unknown = response.status === 204 ? null : await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      isErrorBody(data) ? data : { error: "http_error", message: `Erreur HTTP ${response.status}` },
+    );
+  }
+  return data as T;
+}
+
+export const api = {
+  me: () => request<{ user: User }>("GET", "/auth/me"),
+  login: (email: string, password: string) => request<{ user: User }>("POST", "/auth/login", { email, password }),
+  logout: () => request<null>("POST", "/auth/logout"),
+
+  listQuotes: () => request<QuoteSummary[]>("GET", "/quotes"),
+  getQuote: (id: string) => request<QuoteDetail>("GET", `/quotes/${id}`),
+  createQuote: (client: { name: string; email?: string }, title: string) =>
+    request<QuoteDetail>("POST", "/quotes", { client, title }),
+  changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
+
+  updateLine: (quoteId: string, lineId: string, update: { unitPriceCents?: number | null; vatRateBp?: number }) =>
+    request<QuoteDetail>("PATCH", `/quotes/${quoteId}/lines/${lineId}`, update),
+  deleteLine: (quoteId: string, lineId: string) => request<QuoteDetail>("DELETE", `/quotes/${quoteId}/lines/${lineId}`),
+
+  uploadClip: (quoteId: string, wav: Blob, clientClipId: string, recordedAt: Date) =>
+    request<Clip>(
+      "POST",
+      `/quotes/${quoteId}/clips?clientClipId=${clientClipId}&recordedAt=${encodeURIComponent(recordedAt.toISOString())}`,
+      wav,
+    ),
+  retryClip: (quoteId: string, clipId: string) => request<Clip>("POST", `/quotes/${quoteId}/clips/${clipId}/retry`),
+  clipAudioUrl: (quoteId: string, clipId: string) => `/api/quotes/${quoteId}/clips/${clipId}/audio`,
+};

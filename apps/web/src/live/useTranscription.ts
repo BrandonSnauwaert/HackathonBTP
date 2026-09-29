@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { startRecorder, type Recorder } from "./audio/recorder";
+import { startRecorder, type Recorder } from "../audio/recorder";
 
 export type Status = "idle" | "connecting" | "recording" | "error";
 

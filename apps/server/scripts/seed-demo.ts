@@ -7,9 +7,12 @@
  * Toutes les données sont fictives (SIRET, assureur, clients...).
  */
 import "dotenv/config";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
 import { hashPassword } from "../src/auth/password.js";
 import { config } from "../src/config.js";
-import { execute, openDatabase } from "../src/db/database.js";
+import { execute, openDatabase, queryAll } from "../src/db/database.js";
 import { createUser, findUserByEmail } from "../src/repositories/users.js";
 import { updateCompany } from "../src/repositories/companies.js";
 import { createClient } from "../src/repositories/clients.js";
@@ -25,7 +28,17 @@ const db = openDatabase(config.DATABASE_PATH);
 const quotes = createQuoteService(db, { followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS, clipsDir: config.CLIPS_DIR });
 
 const existing = findUserByEmail(db, DEMO_EMAIL);
-if (existing) execute(db, "DELETE FROM users WHERE id = :id", { id: existing.id });
+if (existing) {
+  // Les fichiers audio des dictées ne sont pas supprimés par la cascade SQL.
+  const audioFiles = queryAll(
+    db,
+    z.object({ audio_file: z.string() }),
+    "SELECT c.audio_file FROM clips c JOIN quotes q ON q.id = c.quote_id WHERE q.user_id = :id",
+    { id: existing.id },
+  );
+  await Promise.all(audioFiles.map((f) => rm(join(config.CLIPS_DIR, f.audio_file), { force: true })));
+  execute(db, "DELETE FROM users WHERE id = :id", { id: existing.id });
+}
 
 const user = createUser(db, DEMO_EMAIL, await hashPassword(DEMO_PASSWORD));
 updateCompany(db, user.id, {

@@ -25,9 +25,12 @@ apps/server/            API Node.js (Fastify, TypeScript)
   scripts/              seed de démo, clients de test (WebSocket, navigateur headless)
   samples/              audio de test (chantier-fr.wav)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
-apps/web/               PWA React (Vite, TypeScript)
+apps/web/               PWA React (Vite, TypeScript) — pour l'instant des pages de test, en attendant les maquettes
   public/pcm-recorder-worklet.js   capture micro vers PCM 24 kHz
-  src/audio/  src/useTranscription.ts  src/App.tsx
+  src/api/              client de l'API (fetch + types recopiés de /docs)
+  src/audio/            micro (AudioWorklet), enregistrement talkie-walkie (useClipRecorder), encodage WAV
+  src/test-console/     page de test « Devis & dictées » : connexion, devis, lignes, dictées
+  src/live/             page de test « Transcription live » (WebSocket)
 services/kyutai-stt/    image Docker moshi-server + config du modèle STT
 docker-compose.yml      lance kyutai-stt (GPU)
 CONTEXTE.md             besoin, périmètre, décisions (source de vérité produit)
@@ -45,7 +48,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Dictées : dépôt d'un clip WAV, file de traitement (Kyutai puis LLM), lignes ajoutées au devis, relance, reprise au redémarrage
 - [x] Client LLM compatible OpenAI et extraction des lignes (JSON validé par zod, seconde tentative si invalide)
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
-- [ ] Front : liste des devis, écran d'édition (en attente des maquettes UI/UX)
+- [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
+- [ ] Front définitif : liste des devis, écran d'édition (en attente des maquettes UI/UX)
 - [ ] Page publique du devis (lien secret) avec « Accepter » et « Refuser », suivi de consultation, pixel
 - [ ] Envoi de l'e-mail (service à choisir) et tunnel HTTPS vers le PC de démo
 - [ ] Bonus : PDF conforme, photos, relances automatiques
@@ -88,7 +92,8 @@ Une tâche n'est **pas terminée** tant que ces vérifications ne passent pas :
 | `npm test` | apps/server | tests unitaires (domaine) et d'intégration (API sur SQLite en mémoire) |
 | `npm run build` | apps/web | types et build du front |
 | `npm run test:ws -- samples/chantier-fr.wav` | apps/server | streame le WAV au serveur lancé, affiche les transcriptions |
-| `npm run e2e -- http://localhost:5173 samples/chantier-fr.wav 20000` | apps/server | Chrome headless avec micro simulé : clique sur le micro et lit l'écran |
+| `npm run e2e:dictation` | apps/server | Chrome headless, micro simulé par le WAV : crée un devis sur le compte de démo, maintient le bouton talkie-walkie, affiche transcription et lignes (`SCREENSHOT=x.png` pour une capture) |
+| `npm run e2e -- http://localhost:5173 samples/chantier-fr.wav 20000` | apps/server | idem pour la page « Transcription live » |
 
 - La **logique pure** (calculs de devis, TVA, transitions de statut) doit avoir des tests unitaires (`*.test.ts` à côté du fichier, avec `node:test`).
 - Toute nouvelle route doit être couverte dans `src/app.test.ts` (via `app.inject`, sans serveur réel).
@@ -121,13 +126,13 @@ interface Transcriber {
 - `LineExtractor.extract({ transcript, existingLines })` renvoie `{ lines, warnings }`. Le prompt est dans `line-extractor.ts` (`SYSTEM_PROMPT`). La réponse est validée par zod avec une normalisation tolérante des unités et de la TVA, et redemandée une fois si elle est invalide. **Jamais de prix** dans la sortie.
 - Configuration : `LLM_PROVIDER` (`mock` = extraction par mots-clés sans LLM, `openai`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_TIMEOUT_MS`, `LLM_JSON_MODE` (`json_object` par défaut ; `json_schema` si le serveur le gère ; `none` si le serveur refuse `response_format`).
 
-**Dictées** : `POST /api/quotes/:id/clips`, corps WAV brut (`Content-Type: audio/wav`), avec `clientClipId` (UUID généré par le téléphone, qui rend le renvoi sans risque) et `recordedAt`. Traitement en tâche de fond, **un clip à la fois** : `pending → transcribing → extracting → done | failed`. Le front suit l'avancement via le champ `clips` de `GET /api/quotes/:id`. Une transcription réussie est conservée : une relance ne refait que l'appel au LLM.
+**Dictées** : `POST /api/quotes/:id/clips`, corps WAV brut (`Content-Type: audio/wav`), avec `clientClipId` (UUID généré par le téléphone, qui rend le renvoi sans risque) et `recordedAt`. Traitement en tâche de fond, en deux files : la **transcription** (GPU local) enchaîne les clips un par un sans attendre le LLM ; l'**analyse** (LLM distant) démarre dès qu'un texte est prêt, dans l'ordre des dictées pour un même devis, en parallèle entre devis. Statuts : `pending → transcribing → transcribed → extracting → done | failed`. Le front suit l'avancement via le champ `clips` de `GET /api/quotes/:id`. Une transcription réussie est conservée : une relance ne refait que l'appel au LLM.
 
 **Format audio** du client vers le serveur : PCM **s16le, mono, 24 kHz**, envoyé en messages binaires. Le rééchantillonnage se fait dans l'AudioWorklet du front.
 
 **WebSocket `/ws`**, du serveur vers le client : `{ "type": "transcript", "text": string, "isFinal": boolean }`.
 
-**Kyutai** : `isFinal` est reconstitué côté serveur. Une phrase se clôt sur une ponctuation finale (`.`, `?`, `!`), ou sur une pause détectée par le VAD sémantique, en tenant compte des ~0,5 s de retard du texte sur l'audio. Voir `kyutai-transcriber.ts`.
+**Kyutai** : `isFinal` est reconstitué côté serveur par `transcription/sentence-assembler.ts` (testé sur une séquence réelle). Une phrase se clôt sur une ponctuation finale (`.`, `?`, `!`), ou quand le VAD sémantique a détecté une pause **et** qu'aucun mot n'est arrivé depuis ~1 s. Pourquoi : le VAD annonce la pause pendant que le dernier mot est encore prononcé, et le texte de ce mot arrive jusqu'à ~0,6 s plus tard. Clore dès le signal du VAD couperait le dernier mot.
 
 ## Conventions
 

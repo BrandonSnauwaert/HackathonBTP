@@ -139,7 +139,7 @@ export const ClipSchema = z
   .object({
     id: z.uuid(),
     clientClipId: z.string().nullable().describe("Identifiant généré par le téléphone"),
-    status: z.enum(CLIP_STATUSES).describe("pending → transcribing → extracting → done, ou failed"),
+    status: z.enum(CLIP_STATUSES).describe("pending → transcribing → transcribed → extracting → done, ou failed"),
     statusLabel: z.string(),
     durationMs: z.number().int(),
     transcript: z.string().nullable().describe("Texte transcrit (null tant que la transcription n'est pas faite)"),
