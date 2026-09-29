@@ -15,7 +15,8 @@ export class HttpError extends Error {
 }
 
 export const notFound = (message: string) => new HttpError(404, "not_found", message);
-export const conflict = (code: string, message: string, details?: unknown) => new HttpError(409, code, message, details);
+export const conflict = (code: string, message: string, details?: unknown) =>
+  new HttpError(409, code, message, details);
 
 export const ErrorResponseSchema = z
   .object({

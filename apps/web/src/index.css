@@ -9,7 +9,12 @@
   --ok: #2b8a3e;
   --danger: #c92a2a;
 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -540,7 +545,9 @@ select {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  transition: box-shadow 80ms linear, transform 80ms;
+  transition:
+    box-shadow 80ms linear,
+    transform 80ms;
 }
 
 .talk-button:disabled {

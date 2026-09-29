@@ -27,7 +27,7 @@ export function decodeWav(buf: Buffer): DecodedAudio {
   let bitsPerSample = 0;
   let data: Buffer | undefined;
 
-  for (let offset = 12; offset + 8 <= buf.length; ) {
+  for (let offset = 12; offset + 8 <= buf.length;) {
     const id = buf.toString("ascii", offset, offset + 4);
     const size = buf.readUInt32LE(offset + 4);
     const body = offset + 8;

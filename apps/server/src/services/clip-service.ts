@@ -124,7 +124,8 @@ export function createClipService(deps: ClipServiceDeps) {
         })),
       });
       quotes.addDictatedLines(userId, clip.quoteId, clipId, result.lines);
-      const warnings = result.lines.length === 0 ? ["Aucune prestation détectée dans la dictée", ...result.warnings] : result.warnings;
+      const warnings =
+        result.lines.length === 0 ? ["Aucune prestation détectée dans la dictée", ...result.warnings] : result.warnings;
       updateClip(db, clipId, { status: "done", warnings });
       logger.info({ clipId, lines: result.lines.length }, "dictée traitée");
       notify(clipId);
@@ -162,7 +163,12 @@ export function createClipService(deps: ClipServiceDeps) {
   }
 
   return {
-    async upload(userId: string, quoteId: string, audio: Buffer, meta: UploadMeta): Promise<{ clip: ClipView; created: boolean }> {
+    async upload(
+      userId: string,
+      quoteId: string,
+      audio: Buffer,
+      meta: UploadMeta,
+    ): Promise<{ clip: ClipView; created: boolean }> {
       quotes.assertEditable(userId, quoteId);
       if (meta.clientClipId) {
         const existing = findClipByClientId(db, quoteId, meta.clientClipId);

@@ -18,7 +18,10 @@ function fakeLlm(responses: string[]): LlmClient & { calls: ChatMessage[][] } {
   };
 }
 
-const input = { transcript: "Dans la cuisine il faut changer la porte et faire un ragréage de 12 m².", existingLines: [] };
+const input = {
+  transcript: "Dans la cuisine il faut changer la porte et faire un ragréage de 12 m².",
+  existingLines: [],
+};
 
 describe("parseJsonResponse", () => {
   it("accepte du JSON brut, entouré de ```json ou de texte", () => {
@@ -58,13 +61,22 @@ describe("createLlmLineExtractor", () => {
       }),
     ]);
     const result = await createLlmLineExtractor(llm).extract(input);
-    assert.deepEqual(result.lines[1], { description: "Ragréage du sol", room: "Cuisine", quantity: 12, unit: "m2", vatRateBp: 1000 });
+    assert.deepEqual(result.lines[1], {
+      description: "Ragréage du sol",
+      room: "Cuisine",
+      quantity: 12,
+      unit: "m2",
+      vatRateBp: 1000,
+    });
     assert.deepEqual(result.warnings, ["Dimensions de la porte"]);
     assert.match(llm.calls[0]?.[1]?.content ?? "", /ragréage de 12 m²/);
   });
 
   it("redemande une fois si la réponse est invalide", async () => {
-    const llm = fakeLlm(["Désolé, je ne peux pas.", '{"lines":[{"description":"Porte","quantity":1,"unit":"u","vatRate":20}]}']);
+    const llm = fakeLlm([
+      "Désolé, je ne peux pas.",
+      '{"lines":[{"description":"Porte","quantity":1,"unit":"u","vatRate":20}]}',
+    ]);
     const result = await createLlmLineExtractor(llm).extract(input);
     assert.equal(result.lines.length, 1);
     assert.equal(llm.calls.length, 2);
@@ -116,7 +128,8 @@ describe("createOpenAiCompatibleClient", () => {
 describe("mockLineExtractor", () => {
   it("fait une ligne par phrase utile", async () => {
     const result = await mockLineExtractor.extract({
-      transcript: "Bonjour madame. Dans la cuisine il faut un ragréage de 12 m². Pour la salle de bain, on change le lavabo.",
+      transcript:
+        "Bonjour madame. Dans la cuisine il faut un ragréage de 12 m². Pour la salle de bain, on change le lavabo.",
       existingLines: [],
     });
     assert.equal(result.lines.length, 2);

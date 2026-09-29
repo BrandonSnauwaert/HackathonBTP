@@ -53,7 +53,12 @@ describe("SentenceAssembler", () => {
   });
 
   it("clôt immédiatement sur une ponctuation finale", () => {
-    const finals = replay([["step", 1, 0.1], ["word", "Bonjour"], ["word", "madame."], ["word", "Alors"]]);
+    const finals = replay([
+      ["step", 1, 0.1],
+      ["word", "Bonjour"],
+      ["word", "madame."],
+      ["word", "Alors"],
+    ]);
     assert.deepEqual(finals, ["Bonjour madame."]);
   });
 

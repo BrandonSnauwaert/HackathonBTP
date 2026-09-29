@@ -15,7 +15,10 @@ export interface AuthRoutesOptions {
 
 const UserResponse = z.object({ user: UserSchema });
 
-export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = async (app, { db, sessionTtlDays, secureCookies }) => {
+export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = async (
+  app,
+  { db, sessionTtlDays, secureCookies },
+) => {
   app.post(
     "/register",
     {

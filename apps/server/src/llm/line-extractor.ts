@@ -31,16 +31,47 @@ export interface LineExtractor {
 // --- Normalisation des réponses du LLM (tolérante : unités et TVA écrites de plusieurs façons)
 
 const UNIT_ALIASES: Record<string, Unit> = {
-  "m²": "m2", m2: "m2", "mètre carré": "m2", "mètres carrés": "m2", "metre carre": "m2", "metres carres": "m2",
-  ml: "ml", "m.l.": "ml", "mètre linéaire": "ml", "mètres linéaires": "ml", m: "ml", "mètre": "ml", "mètres": "ml",
-  "m³": "m3", m3: "m3", "mètre cube": "m3", "mètres cubes": "m3",
-  u: "u", "unité": "u", "unités": "u", "pièce": "u", "pièces": "u", pce: "u", un: "u",
-  h: "h", heure: "h", heures: "h",
-  jour: "jour", jours: "jour", j: "jour",
-  forfait: "forfait", ft: "forfait", fft: "forfait",
-  kg: "kg", kilo: "kg", kilos: "kg",
-  l: "l", litre: "l", litres: "l",
-  ens: "ens", ensemble: "ens",
+  "m²": "m2",
+  m2: "m2",
+  "mètre carré": "m2",
+  "mètres carrés": "m2",
+  "metre carre": "m2",
+  "metres carres": "m2",
+  ml: "ml",
+  "m.l.": "ml",
+  "mètre linéaire": "ml",
+  "mètres linéaires": "ml",
+  m: "ml",
+  mètre: "ml",
+  mètres: "ml",
+  "m³": "m3",
+  m3: "m3",
+  "mètre cube": "m3",
+  "mètres cubes": "m3",
+  u: "u",
+  unité: "u",
+  unités: "u",
+  pièce: "u",
+  pièces: "u",
+  pce: "u",
+  un: "u",
+  h: "h",
+  heure: "h",
+  heures: "h",
+  jour: "jour",
+  jours: "jour",
+  j: "jour",
+  forfait: "forfait",
+  ft: "forfait",
+  fft: "forfait",
+  kg: "kg",
+  kilo: "kg",
+  kilos: "kg",
+  l: "l",
+  litre: "l",
+  litres: "l",
+  ens: "ens",
+  ensemble: "ens",
 };
 
 export function normalizeUnit(value: string): Unit {
@@ -52,7 +83,11 @@ export function normalizeUnit(value: string): Unit {
 /** 10, "10", "10 %", 0.1, "5,5", 5.5, 1000 → points de base autorisés ; 10 % par défaut. */
 export function normalizeVatRate(value: unknown): VatRateBp {
   const number =
-    typeof value === "number" ? value : typeof value === "string" ? Number(value.replace("%", "").replace(",", ".").trim()) : NaN;
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value.replace("%", "").replace(",", ".").trim())
+        : NaN;
   if (!Number.isFinite(number)) return 1000;
   const percent = number > 0 && number < 1 ? number * 100 : number >= 100 ? number / 100 : number;
   if (Math.abs(percent - 20) < 0.01) return 2000;
@@ -64,12 +99,21 @@ export function normalizeVatRate(value: unknown): VatRateBp {
 
 const LlmLineSchema = z.object({
   description: z.string().trim().min(1),
-  room: z.string().nullish().transform((v) => v?.trim() ?? ""),
-  quantity: z.union([z.number(), z.string()]).nullish().transform((v) => {
-    const n = typeof v === "string" ? Number(v.replace(",", ".")) : v;
-    return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : 1;
-  }),
-  unit: z.string().nullish().transform((v) => normalizeUnit(v ?? "u")),
+  room: z
+    .string()
+    .nullish()
+    .transform((v) => v?.trim() ?? ""),
+  quantity: z
+    .union([z.number(), z.string()])
+    .nullish()
+    .transform((v) => {
+      const n = typeof v === "string" ? Number(v.replace(",", ".")) : v;
+      return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : 1;
+    }),
+  unit: z
+    .string()
+    .nullish()
+    .transform((v) => normalizeUnit(v ?? "u")),
   vatRate: z.unknown().transform(normalizeVatRate),
 });
 
@@ -156,7 +200,8 @@ export function createLlmLineExtractor(llm: LlmClient): LineExtractor {
         try {
           return toResult(LlmResponseSchema.parse(parseJsonResponse(text)));
         } catch (err) {
-          lastError = err instanceof z.ZodError ? z.prettifyError(err) : err instanceof Error ? err.message : String(err);
+          lastError =
+            err instanceof z.ZodError ? z.prettifyError(err) : err instanceof Error ? err.message : String(err);
           messages.push(
             { role: "assistant", content: text },
             { role: "user", content: `Réponse invalide (${lastError}). Réponds uniquement avec le JSON demandé.` },
@@ -170,7 +215,23 @@ export function createLlmLineExtractor(llm: LlmClient): LineExtractor {
 
 // --- Extracteur simulé (LLM_PROVIDER=mock) : pour développer et tester sans LLM.
 
-const ROOMS = ["cuisine", "salle de bain", "salle d'eau", "salon", "séjour", "chambre", "couloir", "entrée", "wc", "toilettes", "combles", "garage", "cave", "bureau", "terrasse"];
+const ROOMS = [
+  "cuisine",
+  "salle de bain",
+  "salle d'eau",
+  "salon",
+  "séjour",
+  "chambre",
+  "couloir",
+  "entrée",
+  "wc",
+  "toilettes",
+  "combles",
+  "garage",
+  "cave",
+  "bureau",
+  "terrasse",
+];
 
 /** Une ligne par phrase d'au moins 4 mots, avec pièce et quantité repérées par mots-clés. */
 export const mockLineExtractor: LineExtractor = {

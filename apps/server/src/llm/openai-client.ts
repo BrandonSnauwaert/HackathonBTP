@@ -28,10 +28,14 @@ export function createOpenAiCompatibleClient(options: OpenAiCompatibleOptions): 
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });
 
-  function responseFormat(json: CompletionOptions["json"]): Pick<ChatCompletionCreateParamsNonStreaming, "response_format"> {
+  function responseFormat(
+    json: CompletionOptions["json"],
+  ): Pick<ChatCompletionCreateParamsNonStreaming, "response_format"> {
     if (!json || options.jsonMode === "none") return {};
     if (options.jsonMode === "json_object") return { response_format: { type: "json_object" } };
-    return { response_format: { type: "json_schema", json_schema: { name: json.name, schema: json.schema, strict: false } } };
+    return {
+      response_format: { type: "json_schema", json_schema: { name: json.name, schema: json.schema, strict: false } },
+    };
   }
 
   return {

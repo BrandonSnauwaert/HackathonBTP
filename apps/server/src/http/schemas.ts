@@ -227,7 +227,15 @@ export const QuoteCreateSchema = z
     client: ClientInputSchema.optional().describe("...ou nouveau client créé en même temps que le devis"),
     ...QuoteMetaFields,
   })
-  .partial({ title: true, siteAddress: true, validityDays: true, startDate: true, duration: true, paymentTerms: true, notes: true })
+  .partial({
+    title: true,
+    siteAddress: true,
+    validityDays: true,
+    startDate: true,
+    duration: true,
+    paymentTerms: true,
+    notes: true,
+  })
   .refine((body) => (body.clientId === undefined) !== (body.client === undefined), {
     message: "Indiquer soit clientId, soit client (pas les deux)",
   })

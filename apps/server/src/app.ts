@@ -54,11 +54,13 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
       if (error.details !== undefined) body.details = error.details;
       return reply.code(error.statusCode).send(body);
     }
-    const status = typeof error === "object" && error !== null && "statusCode" in error ? Number(error.statusCode) : 500;
+    const status =
+      typeof error === "object" && error !== null && "statusCode" in error ? Number(error.statusCode) : 500;
     if (status >= 500) request.log.error(error);
     return reply.code(status).send({
       error: status >= 500 ? "internal" : "request_error",
-      message: status >= 500 ? "Erreur interne du serveur" : error instanceof Error ? error.message : "Requête invalide",
+      message:
+        status >= 500 ? "Erreur interne du serveur" : error instanceof Error ? error.message : "Requête invalide",
     });
   });
 
@@ -80,7 +82,10 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
         { name: "Clients" },
         { name: "Devis", description: "Cycle de vie : brouillon → prêt → envoyé → consulté → accepté / refusé" },
         { name: "Lignes de devis" },
-        { name: "Dictées", description: "Clips audio talkie-walkie : transcription puis extraction des lignes par le LLM" },
+        {
+          name: "Dictées",
+          description: "Clips audio talkie-walkie : transcription puis extraction des lignes par le LLM",
+        },
         { name: "Système" },
       ],
       components: {

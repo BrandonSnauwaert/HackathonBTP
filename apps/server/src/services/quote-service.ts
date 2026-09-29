@@ -75,7 +75,9 @@ export interface QuoteSummary {
 export type CreateQuoteInput = {
   clientId?: string | undefined;
   client?: ClientInput | undefined;
-} & PatchOf<Pick<Quote, "title" | "siteAddress" | "validityDays" | "startDate" | "duration" | "paymentTerms" | "notes">>;
+} & PatchOf<
+  Pick<Quote, "title" | "siteAddress" | "validityDays" | "startDate" | "duration" | "paymentTerms" | "notes">
+>;
 
 export type QuoteMetaUpdate = Omit<QuoteUpdate, "status" | "sentAt">;
 
@@ -97,7 +99,12 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     if (next === null) return quote;
     transaction(db, () => {
       repo.updateQuote(db, quote.id, { status: next });
-      repo.insertEvent(db, quote.id, { type: "status_changed", actor: "system", fromStatus: quote.status, toStatus: next });
+      repo.insertEvent(db, quote.id, {
+        type: "status_changed",
+        actor: "system",
+        fromStatus: quote.status,
+        toStatus: next,
+      });
     });
     return { ...quote, status: next };
   }
@@ -114,7 +121,12 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
   function touch(quote: Quote): void {
     if (quote.status === "ready") {
       repo.updateQuote(db, quote.id, { status: "draft" });
-      repo.insertEvent(db, quote.id, { type: "status_changed", actor: "artisan", fromStatus: "ready", toStatus: "draft" });
+      repo.insertEvent(db, quote.id, {
+        type: "status_changed",
+        actor: "artisan",
+        fromStatus: "ready",
+        toStatus: "draft",
+      });
     } else {
       repo.updateQuote(db, quote.id, {});
     }

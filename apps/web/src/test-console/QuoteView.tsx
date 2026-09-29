@@ -60,6 +60,8 @@ export function QuoteView({ quoteId, onChanged }: { quoteId: string; onChanged: 
 
   // Le parent remonte ce composant (key) à chaque changement de devis : l'état repart de zéro.
   useEffect(() => {
+    // Chargement de données depuis l'API : c'est bien une synchronisation avec un système externe.
+    // oxlint-disable-next-line react/set-state-in-effect
     void load();
   }, [load]);
 
@@ -90,7 +92,11 @@ export function QuoteView({ quoteId, onChanged }: { quoteId: string; onChanged: 
   const onClip = (clip: RecordedClip) => void send({ clientClipId: crypto.randomUUID(), clip, error: null });
 
   const onFile = async (file: File) => {
-    await send({ clientClipId: crypto.randomUUID(), clip: { wav: file, durationMs: 0, recordedAt: new Date() }, error: null });
+    await send({
+      clientClipId: crypto.randomUUID(),
+      clip: { wav: file, durationMs: 0, recordedAt: new Date() },
+      error: null,
+    });
   };
 
   if (!quote) return <section className="panel quote">{error ?? "Chargement…"}</section>;

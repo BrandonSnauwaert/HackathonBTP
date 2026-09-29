@@ -9,7 +9,12 @@ import type { ClipService } from "../services/clip-service.js";
 const tags = ["Dictées"];
 const security = cookieAuth;
 const ClipParams = z.object({ id: z.uuid(), clipId: z.uuid() });
-const errors = { 400: ErrorResponseSchema, 401: ErrorResponseSchema, 404: ErrorResponseSchema, 409: ErrorResponseSchema };
+const errors = {
+  400: ErrorResponseSchema,
+  401: ErrorResponseSchema,
+  404: ErrorResponseSchema,
+  409: ErrorResponseSchema,
+};
 
 /** Attente maximale quand le client demande `wait=true`. */
 const WAIT_TIMEOUT_MS = 120_000;
@@ -20,8 +25,10 @@ export const clipRoutes: FastifyPluginAsyncZod<{ clips: ClipService; maxUploadBy
   { clips, maxUploadBytes },
 ) => {
   app.addHook("onRequest", async (request) => void requireUser(request));
-  app.addContentTypeParser(AUDIO_CONTENT_TYPES, { parseAs: "buffer", bodyLimit: maxUploadBytes }, (_request, body, done) =>
-    done(null, body),
+  app.addContentTypeParser(
+    AUDIO_CONTENT_TYPES,
+    { parseAs: "buffer", bodyLimit: maxUploadBytes },
+    (_request, body, done) => done(null, body),
   );
 
   app.post(

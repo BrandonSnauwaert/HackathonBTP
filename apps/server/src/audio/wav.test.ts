@@ -31,7 +31,18 @@ function wav(options: { rate: number; channels: number; format: 1 | 3; bits: 16 
 
 describe("decodeWav", () => {
   it("décode du PCM 16 bits stéréo en mono", () => {
-    const audio = decodeWav(wav({ rate: 48000, channels: 2, format: 1, bits: 16, frames: [[16384, 0], [-32768, -32768]] }));
+    const audio = decodeWav(
+      wav({
+        rate: 48000,
+        channels: 2,
+        format: 1,
+        bits: 16,
+        frames: [
+          [16384, 0],
+          [-32768, -32768],
+        ],
+      }),
+    );
     assert.equal(audio.sampleRate, 48000);
     assert.deepEqual([...audio.samples], [0.25, -1]);
   });

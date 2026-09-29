@@ -13,7 +13,12 @@ import { openDatabase } from "./db/database.js";
 import { mockLineExtractor, type LineExtractor } from "./llm/line-extractor.js";
 
 const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
-const config = parseConfig({ DATABASE_PATH: ":memory:", CLIPS_DIR: clipsDir, TRANSCRIBER: "mock", LLM_PROVIDER: "mock" });
+const config = parseConfig({
+  DATABASE_PATH: ":memory:",
+  CLIPS_DIR: clipsDir,
+  TRANSCRIBER: "mock",
+  LLM_PROVIDER: "mock",
+});
 const sampleWav = readFileSync(new URL("../samples/chantier-fr.wav", import.meta.url));
 
 /**
@@ -44,7 +49,11 @@ after(async () => {
 
 /** Crée un compte et renvoie une fonction de requête authentifiée. */
 async function signUp(email: string) {
-  const res = await app.inject({ method: "POST", url: "/api/auth/register", payload: { email, password: "motdepasse" } });
+  const res = await app.inject({
+    method: "POST",
+    url: "/api/auth/register",
+    payload: { email, password: "motdepasse" },
+  });
   assert.equal(res.statusCode, 201, res.body);
   const cookie = res.cookies.find((c) => c.name === "sid");
   assert.ok(cookie, "cookie de session posé");
@@ -206,7 +215,12 @@ describe("API", () => {
     const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
     res = await api("POST", `/api/quotes/${quote.id}/lines`, { description: "x", quantity: -1, unit: "u" });
     assert.equal(res.statusCode, 400);
-    res = await api("POST", `/api/quotes/${quote.id}/lines`, { description: "x", quantity: 1, unit: "u", vatRateBp: 1500 });
+    res = await api("POST", `/api/quotes/${quote.id}/lines`, {
+      description: "x",
+      quantity: 1,
+      unit: "u",
+      vatRateBp: 1500,
+    });
     assert.equal(res.statusCode, 400, "taux de TVA inexistant");
   });
 

@@ -36,24 +36,22 @@ const CompanyRow = z
     default_payment_terms: z.string(),
     updated_at: z.string(),
   })
-  .transform(
-    (r): Company => ({
-      name: r.name,
-      legalForm: r.legal_form,
-      address: r.address,
-      phone: r.phone,
-      email: r.email,
-      siret: r.siret,
-      vatNumber: r.vat_number,
-      vatExempt: r.vat_exempt === 1,
-      insurerName: r.insurer_name,
-      insurancePolicyNumber: r.insurance_policy_number,
-      insuranceCoverage: r.insurance_coverage,
-      defaultValidityDays: r.default_validity_days,
-      defaultPaymentTerms: r.default_payment_terms,
-      updatedAt: r.updated_at,
-    }),
-  );
+  .transform((r): Company => ({
+    name: r.name,
+    legalForm: r.legal_form,
+    address: r.address,
+    phone: r.phone,
+    email: r.email,
+    siret: r.siret,
+    vatNumber: r.vat_number,
+    vatExempt: r.vat_exempt === 1,
+    insurerName: r.insurer_name,
+    insurancePolicyNumber: r.insurance_policy_number,
+    insuranceCoverage: r.insurance_coverage,
+    defaultValidityDays: r.default_validity_days,
+    defaultPaymentTerms: r.default_payment_terms,
+    updatedAt: r.updated_at,
+  }));
 
 export function getCompany(db: Database, userId: string): Company {
   const company = queryOne(db, CompanyRow, "SELECT * FROM companies WHERE user_id = :userId", { userId });
@@ -90,7 +88,8 @@ export function companyIssues(company: Company): string[] {
   if (!company.name) issues.push("Profil entreprise : nom ou raison sociale manquant");
   if (!company.address) issues.push("Profil entreprise : adresse manquante");
   if (!company.siret) issues.push("Profil entreprise : SIRET manquant");
-  if (!company.vatExempt && !company.vatNumber) issues.push("Profil entreprise : numéro de TVA intracommunautaire manquant");
+  if (!company.vatExempt && !company.vatNumber)
+    issues.push("Profil entreprise : numéro de TVA intracommunautaire manquant");
   if (!company.insurerName) issues.push("Profil entreprise : assurance décennale manquante");
   return issues;
 }

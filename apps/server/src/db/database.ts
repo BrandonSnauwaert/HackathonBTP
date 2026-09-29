@@ -171,7 +171,10 @@ export function queryOne<T>(db: Database, schema: z.ZodType<T>, sql: string, par
 
 /** Toutes les lignes du résultat, validées par le schéma zod. */
 export function queryAll<T>(db: Database, schema: z.ZodType<T>, sql: string, params: SqlParams = {}): T[] {
-  return db.prepare(sql).all(params).map((row) => schema.parse(row));
+  return db
+    .prepare(sql)
+    .all(params)
+    .map((row) => schema.parse(row));
 }
 
 /** Exécute une requête d'écriture et renvoie le nombre de lignes modifiées. */

@@ -9,7 +9,8 @@ export const formatTime = (iso: string) => time.format(new Date(iso));
 export const formatDuration = (ms: number) => `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
 
 /** Centimes → valeur d'un champ de saisie en euros ("12,50"). */
-export const centsToInput = (cents: number | null) => (cents === null ? "" : (cents / 100).toFixed(2).replace(".", ","));
+export const centsToInput = (cents: number | null) =>
+  cents === null ? "" : (cents / 100).toFixed(2).replace(".", ",");
 
 /** Saisie en euros ("12,5", "1 200.00") → centimes ; null si vide, undefined si invalide. */
 export function parseEuros(value: string): number | null | undefined {

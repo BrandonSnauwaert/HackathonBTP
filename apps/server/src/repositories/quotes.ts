@@ -69,25 +69,23 @@ const QuoteRow = z
     created_at: z.string(),
     updated_at: z.string(),
   })
-  .transform(
-    (r): Quote => ({
-      id: r.id,
-      clientId: r.client_id,
-      number: r.number,
-      status: r.status,
-      title: r.title,
-      siteAddress: r.site_address,
-      validityDays: r.validity_days,
-      startDate: r.start_date,
-      duration: r.duration,
-      paymentTerms: r.payment_terms,
-      notes: r.notes,
-      publicToken: r.public_token,
-      sentAt: r.sent_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }),
-  );
+  .transform((r): Quote => ({
+    id: r.id,
+    clientId: r.client_id,
+    number: r.number,
+    status: r.status,
+    title: r.title,
+    siteAddress: r.site_address,
+    validityDays: r.validity_days,
+    startDate: r.start_date,
+    duration: r.duration,
+    paymentTerms: r.payment_terms,
+    notes: r.notes,
+    publicToken: r.public_token,
+    sentAt: r.sent_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
 
 const LineRow = z
   .object({
@@ -132,16 +130,14 @@ const EventRow = z
     to_status: z.enum(QUOTE_STATUSES).nullable(),
     created_at: z.string(),
   })
-  .transform(
-    (r): QuoteEvent => ({
-      id: r.id,
-      type: r.type,
-      actor: r.actor,
-      fromStatus: r.from_status,
-      toStatus: r.to_status,
-      createdAt: r.created_at,
-    }),
-  );
+  .transform((r): QuoteEvent => ({
+    id: r.id,
+    type: r.type,
+    actor: r.actor,
+    fromStatus: r.from_status,
+    toStatus: r.to_status,
+    createdAt: r.created_at,
+  }));
 
 // --- Devis
 
@@ -189,7 +185,19 @@ export function insertQuote(db: Database, userId: string, quote: NewQuote): void
 }
 
 export type QuoteUpdate = PatchOf<
-  Pick<Quote, "clientId" | "status" | "title" | "siteAddress" | "validityDays" | "startDate" | "duration" | "paymentTerms" | "notes" | "sentAt">
+  Pick<
+    Quote,
+    | "clientId"
+    | "status"
+    | "title"
+    | "siteAddress"
+    | "validityDays"
+    | "startDate"
+    | "duration"
+    | "paymentTerms"
+    | "notes"
+    | "sentAt"
+  >
 >;
 
 export function updateQuote(db: Database, id: string, update: QuoteUpdate): void {
@@ -300,7 +308,11 @@ export function updateLine(db: Database, quoteId: string, lineId: string, update
 export function deleteLine(db: Database, quoteId: string, lineId: string): void {
   getLine(db, quoteId, lineId);
   execute(db, "DELETE FROM quote_lines WHERE id = :lineId AND quote_id = :quoteId", { lineId, quoteId });
-  renumberLines(db, quoteId, listLines(db, quoteId).map((l) => l.id));
+  renumberLines(
+    db,
+    quoteId,
+    listLines(db, quoteId).map((l) => l.id),
+  );
 }
 
 /** Réécrit les positions (1, 2, 3...) dans l'ordre des identifiants fournis. */

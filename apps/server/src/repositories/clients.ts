@@ -26,17 +26,15 @@ const ClientRow = z
     created_at: z.string(),
     updated_at: z.string(),
   })
-  .transform(
-    (r): Client => ({
-      id: r.id,
-      name: r.name,
-      email: r.email,
-      phone: r.phone,
-      address: r.address,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }),
-  );
+  .transform((r): Client => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    phone: r.phone,
+    address: r.address,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
 
 export function listClients(db: Database, userId: string, search?: string): Client[] {
   return queryAll(
@@ -90,7 +88,9 @@ export function updateClient(db: Database, userId: string, id: string, update: P
 
 export function deleteClient(db: Database, userId: string, id: string): void {
   getClient(db, userId, id);
-  const used = queryOne(db, z.object({ n: z.number() }), "SELECT COUNT(*) AS n FROM quotes WHERE client_id = :id", { id });
+  const used = queryOne(db, z.object({ n: z.number() }), "SELECT COUNT(*) AS n FROM quotes WHERE client_id = :id", {
+    id,
+  });
   if (used && used.n > 0) {
     throw conflict("client_has_quotes", `Ce client a ${used.n} devis : impossible de le supprimer`);
   }

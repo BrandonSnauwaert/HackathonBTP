@@ -42,7 +42,12 @@ function LoginForm({ onLogin }: { onLogin: (user: User) => void }) {
       <h2>Connexion</h2>
       <p className="muted">Compte de démo pré-rempli (créé par npm run seed:demo).</p>
       <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" />
-      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mot de passe" />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Mot de passe"
+      />
       {error && <p className="error-text">{error}</p>}
       <button type="submit" className="primary">
         Se connecter

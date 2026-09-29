@@ -15,26 +15,42 @@ import WebSocket from "ws";
 const [url = "http://localhost:5173", wav = "samples/chantier-fr.wav", holdMs = "18500"] = process.argv.slice(2);
 const chrome = process.env.CHROME ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const proc = spawn(chrome, [
-  "--headless=new", "--remote-debugging-port=9334", `--user-data-dir=${mkdtempSync(join(tmpdir(), "e2e-"))}`,
-  "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
-  `--use-file-for-fake-audio-capture=${resolve(wav)}%noloop`, "--window-size=1280,1000", "about:blank",
+  "--headless=new",
+  "--remote-debugging-port=9334",
+  `--user-data-dir=${mkdtempSync(join(tmpdir(), "e2e-"))}`,
+  "--use-fake-ui-for-media-stream",
+  "--use-fake-device-for-media-stream",
+  `--use-file-for-fake-audio-capture=${resolve(wav)}%noloop`,
+  "--window-size=1280,1000",
+  "about:blank",
 ]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let target;
 for (let i = 0; i < 30 && !target; i++) {
   await sleep(300);
-  try { target = (await (await fetch("http://127.0.0.1:9334/json")).json()).find((t) => t.type === "page"); } catch {}
+  try {
+    target = (await (await fetch("http://127.0.0.1:9334/json")).json()).find((t) => t.type === "page");
+  } catch {}
 }
 const cdp = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((r) => cdp.on("open", r));
 let id = 0;
 const pending = new Map();
-cdp.on("message", (d) => { const m = JSON.parse(d); pending.get(m.id)?.(m.result); pending.delete(m.id); });
-const send = (method, params = {}) => new Promise((r) => { pending.set(++id, r); cdp.send(JSON.stringify({ id, method, params })); });
+cdp.on("message", (d) => {
+  const m = JSON.parse(d);
+  pending.get(m.id)?.(m.result);
+  pending.delete(m.id);
+});
+const send = (method, params = {}) =>
+  new Promise((r) => {
+    pending.set(++id, r);
+    cdp.send(JSON.stringify({ id, method, params }));
+  });
 const evaluate = async (expression) =>
   (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }))?.result?.value;
-const text = (selector) => evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].map(e => e.innerText.trim())`);
+const text = (selector) =>
+  evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].map(e => e.innerText.trim())`);
 
 try {
   await send("Page.navigate", { url });
@@ -49,11 +65,15 @@ try {
     .then(r => r.json()).then(q => q.number)`);
   await send("Page.reload");
   await sleep(1500);
-  await evaluate(`[...document.querySelectorAll(".quote-list button")].find(b => b.innerText.includes(${JSON.stringify(number)})).click()`);
+  await evaluate(
+    `[...document.querySelectorAll(".quote-list button")].find(b => b.innerText.includes(${JSON.stringify(number)})).click()`,
+  );
   await sleep(800);
   console.log(`devis ${number} ouvert`);
 
-  const box = await evaluate(`(() => { const r = document.querySelector(".talk-button").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  const box = await evaluate(
+    `(() => { const r = document.querySelector(".talk-button").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`,
+  );
   await send("Input.dispatchMouseEvent", { type: "mousePressed", x: box.x, y: box.y, button: "left", clickCount: 1 });
   await sleep(1000);
   console.log("pendant l'appui :", await text(".talk-hint"));
@@ -66,7 +86,10 @@ try {
     await sleep(1000);
     const badges = await text(".clip .clip-head .badge");
     const status = badges.at(-1) ?? "(aucune dictée)";
-    if (!seen.has(status)) { seen.add(status); console.log(`  ${i + 1} s : ${status}`); }
+    if (!seen.has(status)) {
+      seen.add(status);
+      console.log(`  ${i + 1} s : ${status}`);
+    }
     if (status === "Traité" || status === "Échec" || status === "Envoi échoué") break;
   }
   console.log("\ntranscription :", (await text(".clip blockquote")).join(" | ") || "(aucune)");

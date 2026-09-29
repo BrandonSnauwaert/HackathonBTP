@@ -47,23 +47,21 @@ const ClipRow = z
     created_at: z.string(),
     updated_at: z.string(),
   })
-  .transform(
-    (r): Clip => ({
-      id: r.id,
-      quoteId: r.quote_id,
-      clientClipId: r.client_clip_id,
-      status: r.status,
-      audioFile: r.audio_file,
-      durationMs: r.duration_ms,
-      transcript: r.transcript,
-      warnings: z.array(z.string()).catch([]).parse(JSON.parse(r.warnings)),
-      error: r.error,
-      attempts: r.attempts,
-      recordedAt: r.recorded_at,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }),
-  );
+  .transform((r): Clip => ({
+    id: r.id,
+    quoteId: r.quote_id,
+    clientClipId: r.client_clip_id,
+    status: r.status,
+    audioFile: r.audio_file,
+    durationMs: r.duration_ms,
+    transcript: r.transcript,
+    warnings: z.array(z.string()).catch([]).parse(JSON.parse(r.warnings)),
+    error: r.error,
+    attempts: r.attempts,
+    recordedAt: r.recorded_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
 
 export function listClips(db: Database, quoteId: string): Clip[] {
   return queryAll(db, ClipRow, "SELECT * FROM clips WHERE quote_id = :quoteId ORDER BY recorded_at, created_at", {

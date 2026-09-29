@@ -77,7 +77,12 @@ export const clientRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (app,
         security,
         summary: "Supprimer un client (refusé s'il a des devis)",
         params: IdParams,
-        response: { 204: z.null().describe("Supprimé"), 401: ErrorResponseSchema, 404: ErrorResponseSchema, 409: ErrorResponseSchema },
+        response: {
+          204: z.null().describe("Supprimé"),
+          401: ErrorResponseSchema,
+          404: ErrorResponseSchema,
+          409: ErrorResponseSchema,
+        },
       },
     },
     async (request, reply) => {
