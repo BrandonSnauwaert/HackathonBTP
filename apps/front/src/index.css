@@ -329,6 +329,25 @@ a {
   background: var(--yellow);
 }
 
+.ic.green {
+  background: var(--green);
+  color: #fff;
+}
+
+.ic.grey {
+  background: var(--surface-2);
+  color: var(--grey-text);
+}
+
+.card.ok {
+  box-shadow: 0 0 0 2px var(--green);
+  background: var(--green-soft);
+}
+
+.url-text {
+  word-break: break-all;
+}
+
 .ic.blue {
   background: var(--blue-soft);
   color: var(--blue-dark);

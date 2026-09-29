@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { QuoteEvent, QuoteStatus } from "../api/types";
 import { StatusBadge } from "../components/Badge";
+import { useState } from "react";
 import { formatCents, formatDayTime, formatShortDate } from "../format";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
@@ -17,8 +18,19 @@ const STATUS_EVENTS: Record<QuoteStatus, string> = {
   expired: "expiré",
 };
 
+const EVENT_LABELS: Record<string, string> = {
+  created: "devis créé",
+  sent_by_email: "envoyé par e-mail",
+  sent: "lien du devis créé (partagé par vous)",
+  viewed: "ouvert par le client",
+  // Indicatif seulement : Apple Mail précharge les images (faux « ouvert »).
+  email_opened: "e-mail affiché (indicatif)",
+  email_resent: "e-mail renvoyé",
+};
+
 function eventLabel(event: QuoteEvent): string {
-  if (event.type === "created") return "devis créé";
+  const known = EVENT_LABELS[event.type];
+  if (known) return known;
   if (event.type !== "status_changed" || !event.toStatus) return event.type;
   const label = STATUS_EVENTS[event.toStatus];
   if (event.toStatus === "accepted" || event.toStatus === "declined") {
@@ -26,6 +38,8 @@ function eventLabel(event: QuoteEvent): string {
   }
   return label;
 }
+
+const RESENDABLE: readonly QuoteStatus[] = ["sent", "viewed", "follow_up"];
 
 const ACTIONS: Partial<Record<QuoteStatus, string>> = {
   accepted: "Marquer accepté",
@@ -36,9 +50,25 @@ const ACTIONS: Partial<Record<QuoteStatus, string>> = {
 /** E5 — Suivi d'un devis : état, relance à faire, chronologie, réponse orale du client. */
 export function TrackingScreen({ quoteId }: { quoteId: string }) {
   const { quote, error, run } = useQuote(quoteId);
+  const [copied, setCopied] = useState(false);
+  const [resent, setResent] = useState(false);
   if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
 
-  const { client } = quote;
+  const { client, response } = quote;
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      window.prompt("Copiez le lien du devis :", url);
+    }
+  };
+
+  const resend = async () => {
+    setResent(false);
+    setResent(await run(() => api.resendEmail(quote.id)));
+  };
   const events = [...quote.events].reverse();
 
   const act = async (status: QuoteStatus) => {
@@ -90,11 +120,53 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
             </div>
           </div>
         )}
-        {quote.status === "viewed" && (
+        {response && (
+          <div className={`card pad ${response.decision === "accepted" ? "ok" : ""}`}>
+            <div className="row start">
+              <div className={`ic ${response.decision === "accepted" ? "green" : "grey"}`}>
+                {response.decision === "accepted" ? "✓" : "✕"}
+              </div>
+              <span className="b">
+                {response.decision === "accepted" ? "Bon pour accord" : "Devis refusé"} · {formatDayTime(response.at)}
+              </span>
+            </div>
+            {response.name && (
+              <div>
+                {response.decision === "accepted" ? "Signé par " : "Par "}
+                <span className="b">{response.name}</span>
+              </div>
+            )}
+            {response.message && <div className="card flat small">« {response.message} »</div>}
+          </div>
+        )}
+        {!response && quote.viewedAt && (
           <div className="card pad">
             <div className="row start">
               <div className="ic blue">◉</div>
-              <span className="b">{client.name} a ouvert le devis.</span>
+              <span className="b">
+                {client.name} a ouvert le devis · {formatDayTime(quote.viewedAt)}
+              </span>
+            </div>
+          </div>
+        )}
+        {quote.publicUrl && (
+          <div className="card pad">
+            <div className="row">
+              <span className="b">Page du devis</span>
+              <a className="link" href={quote.publicUrl} target="_blank" rel="noreferrer">
+                Ouvrir ↗
+              </a>
+            </div>
+            <div className="mut small url-text">{quote.publicUrl}</div>
+            <div className="btns">
+              <button className="btn" onClick={() => void copyLink(quote.publicUrl ?? "")}>
+                {copied ? "Lien copié ✓" : "Copier le lien"}
+              </button>
+              {RESENDABLE.includes(quote.status) && client.email && (
+                <button className="btn" onClick={() => void resend()}>
+                  {resent ? "E-mail renvoyé ✓" : "Renvoyer l'e-mail"}
+                </button>
+              )}
             </div>
           </div>
         )}

@@ -65,8 +65,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [ ] Tunnel HTTPS pour que le lien de l'e-mail et le micro fonctionnent depuis un téléphone
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
-- [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, validation), suivi (chronologie, relance, accepté / refusé). Mobile et ordinateur.
-- [ ] Front : page client (E6), vrai envoi depuis l'écran Envoi, file hors connexion, thème sombre
+- [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, e-mail ou lien seul), suivi (ouverture, réponse du client, lien, renvoi de l'e-mail, relance, accepté / refusé). Mobile et ordinateur.
+- [ ] Front : page client (E6) au style de la maquette (pour l'instant celle de `apps/web`), file hors connexion, thème sombre
 - [ ] Page publique du devis (lien secret) avec « Accepter » et « Refuser », suivi de consultation, pixel
 - [ ] Envoi de l'e-mail (service à choisir) et tunnel HTTPS vers le PC de démo
 - [ ] Bonus : PDF conforme, photos, relances automatiques

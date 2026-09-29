@@ -62,6 +62,9 @@ export const api = {
     request<QuoteDetail>("POST", "/quotes", { client, title, siteAddress }),
   updateQuote: (id: string, update: { startDate?: string | null; duration?: string }) =>
     request<QuoteDetail>("PATCH", `/quotes/${id}`, update),
+  /** byEmail = false : aucun e-mail, l'artisan partage le lien lui-même. Le devis doit être « prêt ». */
+  sendQuote: (id: string, byEmail: boolean) => request<QuoteDetail>("POST", `/quotes/${id}/send`, { byEmail }),
+  resendEmail: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/resend`),
   changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
 
   updateLine: (

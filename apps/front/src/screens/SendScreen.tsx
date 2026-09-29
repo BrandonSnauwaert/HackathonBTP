@@ -3,7 +3,6 @@ import { api } from "../api/client";
 import type { Company, QuoteDetail } from "../api/types";
 import { Badge } from "../components/Badge";
 import { Totals } from "../components/Totals";
-import { formatCents } from "../format";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
 
@@ -37,19 +36,18 @@ function mentions(quote: QuoteDetail, company: Company | null): Mention[] {
 }
 
 /**
- * E4 — Envoi : contrôle des mentions obligatoires, date de début et durée, puis validation du devis.
- * L'envoi réel de l'e-mail n'existe pas encore côté serveur : le devis passe seulement « prêt à envoyer ».
+ * E4 — Envoi : contrôle des mentions obligatoires, date de début et durée, puis envoi
+ * (e-mail avec le bouton « Voir le devis », ou lien seul que l'artisan partage lui-même).
  */
 export function SendScreen({ quoteId, company }: { quoteId: string; company: Company | null }) {
   const { quote, error, run } = useQuote(quoteId);
+  const [byEmail, setByEmail] = useState(true);
   if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
 
   const list = mentions(quote, company);
   const okCount = list.filter((m) => m.ok).length;
-  const message =
-    `Bonjour ${quote.client.name}, voici le devis ${quote.title ? `pour « ${quote.title} » ` : ""}` +
-    `d'un montant de ${formatCents(quote.totals.totalTtcCents)} TTC. Je reste disponible pour toute question.` +
-    (company?.name ? ` ${company.name}` : "");
+  // Objet de l'e-mail tel que le serveur l'écrit (src/email/quote-email.ts).
+  const subject = `Votre devis ${quote.number} de ${company?.name ?? "votre artisan"}`;
 
   return (
     <div className="screen send">
@@ -82,17 +80,36 @@ export function SendScreen({ quoteId, company }: { quoteId: string; company: Com
 
           <ScheduleCard quote={quote} onSave={(update) => void run(() => api.updateQuote(quote.id, update))} />
 
-          <div className="b">Envoyer par e-mail</div>
-          <div className="card flat small">
-            « {message} »<span className="mut">Le client recevra un lien « Voir le devis ».</span>
+          <div className="b">Envoyer par</div>
+          <div className="seg">
+            <button type="button" className={byEmail ? "on" : ""} onClick={() => setByEmail(true)}>
+              E-mail
+            </button>
+            <button type="button" className={byEmail ? "" : "on"} onClick={() => setByEmail(false)}>
+              Lien seul
+            </button>
           </div>
+          {byEmail ? (
+            <div className="card flat small">
+              <span className="b">« {subject} »</span>
+              <span className="mut">
+                À {quote.client.email || "(e-mail du client manquant)"} : montant, date de validité et bouton « Voir le
+                devis ». Les réponses du client arrivent sur votre adresse.
+              </span>
+            </div>
+          ) : (
+            <div className="card flat small">
+              Aucun e-mail : vous partagez vous-même le lien de la page du devis (SMS, messagerie…). Il s'affichera dans
+              le suivi.
+            </div>
+          )}
         </div>
 
         <aside className="send-aside">
           <div className="card pad">
             <Totals quote={quote} />
           </div>
-          <SendActions quote={quote} run={run} />
+          <SendActions quote={quote} byEmail={byEmail} run={run} />
         </aside>
       </div>
     </div>
@@ -134,37 +151,47 @@ function ScheduleCard({
   );
 }
 
-function SendActions({ quote, run }: { quote: QuoteDetail; run: (a: () => Promise<QuoteDetail>) => Promise<boolean> }) {
-  if (quote.status === "draft") {
+function SendActions(props: {
+  quote: QuoteDetail;
+  byEmail: boolean;
+  run: (action: () => Promise<QuoteDetail>) => Promise<boolean>;
+}) {
+  const { quote, byEmail, run } = props;
+  const [busy, setBusy] = useState(false);
+
+  if (quote.status !== "draft" && quote.status !== "ready") {
     return (
-      <button
-        className={`btn ${quote.issues.length > 0 ? "dis" : "pri"}`}
-        disabled={quote.issues.length > 0}
-        onClick={() => void run(() => api.changeStatus(quote.id, "ready"))}
-      >
-        Valider le devis
+      <button className="btn pri" onClick={() => navigate({ name: "tracking", id: quote.id })}>
+        Voir le suivi
       </button>
     );
   }
-  if (quote.status === "ready") {
-    return (
-      <>
-        <div className="card w small">
-          <span className="b">Devis prêt à envoyer.</span>
-          L'envoi par e-mail n'est pas encore branché sur le serveur.
-        </div>
-        <button className="btn dis" disabled>
-          Envoyer le devis · bientôt
-        </button>
+
+  /** Un brouillon complet est d'abord validé (« prêt »), puis envoyé : un seul geste pour l'artisan. */
+  const sendNow = async () => {
+    setBusy(true);
+    const ready = quote.status === "ready" || (await run(() => api.changeStatus(quote.id, "ready")));
+    const sent = ready && (await run(() => api.sendQuote(quote.id, byEmail)));
+    setBusy(false);
+    if (sent) navigate({ name: "tracking", id: quote.id });
+  };
+
+  const blocked = quote.issues.length > 0;
+  return (
+    <>
+      <button
+        className={`btn ${blocked || busy ? "dis" : "pri"}`}
+        disabled={blocked || busy}
+        onClick={() => void sendNow()}
+      >
+        {busy ? "Envoi…" : byEmail ? "Envoyer le devis" : "Créer le lien du devis"}
+      </button>
+      {blocked && <span className="small mut">Complétez d'abord : {quote.issues.join(" · ")}</span>}
+      {quote.status === "ready" && (
         <button className="btn ghost" onClick={() => void run(() => api.changeStatus(quote.id, "draft"))}>
           Repasser en brouillon
         </button>
-      </>
-    );
-  }
-  return (
-    <button className="btn pri" onClick={() => navigate({ name: "tracking", id: quote.id })}>
-      Voir le suivi
-    </button>
+      )}
+    </>
   );
 }
