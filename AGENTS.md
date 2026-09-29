@@ -55,7 +55,7 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Client LLM compatible OpenAI et extraction des lignes (JSON validé par zod, seconde tentative si invalide)
 - [x] Photos de chantier : ajout (renvoi sans doublon), légende, visibilité client, suppression ; réduites sur l'appareil
 - [x] Envoi du devis (lien public) et page client : document avec mentions légales, « Accepter » / « Refuser », impression PDF, suivi (consulté, pixel)
-- [x] Envoi du devis par e-mail (SMTP Brevo ; mode « log » par défaut, sans envoi)
+- [x] Envoi du devis par e-mail (SMTP ; MailHog en local pour la démo, boîte sur http://localhost:8025)
 - [ ] Tunnel HTTPS pour que le lien de l'e-mail et le micro fonctionnent depuis un téléphone
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
@@ -93,8 +93,9 @@ cd ../web; npm install
 Machine de dev : Windows et PowerShell. Pour définir une variable d'environnement, `$env:VAR="x"; commande`, ou passer par le `.env`.
 
 ```powershell
-# 1. STT Kyutai (GPU NVIDIA requis). Premier build ~20 min, puis ~20 s au démarrage.
-docker compose up -d kyutai-stt          # à la racine ; arrêt : docker compose stop kyutai-stt
+# 1. Conteneurs, à la racine
+docker compose up -d mailhog             # e-mails : boîte de réception sur http://localhost:8025
+docker compose up -d kyutai-stt          # STT (GPU NVIDIA requis). Premier build ~20 min, puis ~20 s ; arrêt : docker compose stop kyutai-stt
 
 # 2. Serveur (port 3000). Copier .env.example en .env ; TRANSCRIBER=mock sans GPU.
 cd apps/server; npm run seed:demo   # (ré)initialise le compte demo@artisan.test / demo1234
@@ -147,7 +148,7 @@ Pour **ajouter une route** : schémas zod dans `src/http/schemas.ts` (avec `.met
 
 **Envoi et page client** :
 - `POST /api/quotes/:id/send` : e-mail au client (bouton « Voir le devis », pixel, `Reply-To` = e-mail de l'artisan), **puis** le devis `ready` passe en `sent` (figé) avec son lien public `publicUrl` = `PUBLIC_BASE_URL/d/<secret>`. Si l'e-mail échoue : 502 `email_failed` et le devis reste `ready`. `{ "byEmail": false }` : pas d'e-mail, lien partagé à la main.
-- **E-mails** : `EMAIL_PROVIDER=log` par défaut (l'e-mail est écrit dans les logs, rien ne part : développement, tests, équipe sans identifiants). `EMAIL_PROVIDER=smtp` + `SMTP_SERVER`, `SMTP_PORT`, `SMTP_LOGIN`, `SMTP_API_KEY`, `EMAIL_FROM` pour un envoi réel (Brevo). Au démarrage en SMTP, la connexion est vérifiée sans rien envoyer (voir les logs).
+- **E-mails** : en démo et en développement, **MailHog** (conteneur `mailhog`) reçoit tous les e-mails envoyés par l'app, sans rien envoyer sur Internet. On les lit sur http://localhost:8025 (c'est là qu'on clique « Voir le devis » pendant la démo). Configuration : `EMAIL_PROVIDER=smtp`, `SMTP_SERVER=localhost`, `SMTP_PORT=1025`, identifiants vides. Sans configuration, le code est en `EMAIL_PROVIDER=log` (e-mail écrit dans les logs). Un vrai fournisseur SMTP (Brevo...) marche en renseignant `SMTP_LOGIN` / `SMTP_API_KEY` ; Brevo a refusé l'expéditeur `devis@homiesapp.fr` (rejet après acceptation SMTP, donc invisible pour l'app), d'où MailHog. Au démarrage en SMTP, la connexion est vérifiée sans rien envoyer (voir les logs).
 - Routes publiques **sans connexion** sous `/api/public/quotes/:token` : ouverture, `accept` (nom obligatoire, vaut signature), `decline`, photos partagées, `pixel.gif`. Un devis non envoyé n'y est jamais accessible (404).
 - Le document public (`QuoteDocument`) ne contient **rien d'interne** : ni notes, ni dictées, ni points à compléter, ni photos non partagées. Un test le vérifie.
 - **« Consulté » = ouverture de la page par le client.** Le pixel de l'e-mail ne fait qu'ajouter un événement `email_opened` à l'historique, car Apple Mail précharge les images.

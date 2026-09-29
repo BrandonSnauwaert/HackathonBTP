@@ -18,5 +18,13 @@ services:
               count: all
               capabilities: [gpu]
 
+  # Serveur e-mail local : garde tous les e-mails envoyés par l'app (rien ne part sur Internet).
+  # Boîte de réception : http://localhost:8025 — SMTP pour l'app : localhost:1025
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   hf-cache:

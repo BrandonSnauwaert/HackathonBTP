@@ -55,7 +55,8 @@ const EnvSchema = z
       ctx.addIssue({ code: "custom", path: ["LLM_MODEL"], message: "obligatoire quand LLM_PROVIDER=openai" });
     }
     if (env.EMAIL_PROVIDER === "smtp") {
-      for (const key of ["EMAIL_FROM", "SMTP_SERVER", "SMTP_LOGIN", "SMTP_API_KEY"] as const) {
+      // Identifiant et mot de passe facultatifs : un serveur local comme MailHog n'en demande pas.
+      for (const key of ["EMAIL_FROM", "SMTP_SERVER"] as const) {
         if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "obligatoire quand EMAIL_PROVIDER=smtp" });
       }
     }

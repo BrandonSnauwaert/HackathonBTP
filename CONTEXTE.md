@@ -74,7 +74,7 @@ L'artisan **dicte** ce qu'il faut faire, directement sur le chantier, même **sa
 | Suivi d'ouverture | Principal : un **bouton « Voir le devis »** qui mène à une page publique du devis. Secondaire : un pixel de suivi. | Le pixel n'est pas fiable : Apple Mail précharge les images (faux « ouvert »), et certains clients mail les bloquent. Le clic, lui, est certain. |
 | Stockage | **SQLite**, un seul fichier. | Suffisant pour un MVP, rien à installer. |
 | Hébergement de la démo | **Le PC de Thomas fait serveur.** Le téléphone y accède via un tunnel HTTPS gratuit (sans nom de domaine). | Le GPU est sur ce PC. Le micro du navigateur exige HTTPS, et la page publique du devis doit être accessible depuis Internet. |
-| E-mails | **Brevo en SMTP**, expéditeur `devis@homiesapp.fr` (domaine déjà authentifié chez Brevo, emprunté pour la démo). Nom affiché = l'entreprise de l'artisan, réponses vers l'artisan (`Reply-To`). | Pas de nom de domaine propre au projet ; celui-ci est déjà configuré (SPF/DKIM), donc les e-mails ne partent pas en indésirables. |
+| E-mails | **MailHog en local** : l'app envoie réellement ses e-mails (SMTP), mais une boîte de réception locale les garde ; on la montre pendant la démo (http://localhost:8025). | Brevo a rejeté l'expéditeur malgré le domaine configuré ; MailHog supprime tout risque de délivrabilité le jour J. Le code reste compatible avec un vrai fournisseur SMTP. |
 | Compte de démo | Un **compte artisan fictif** pré-rempli (entreprise, SIRET, assurance…). | Pas de saisie de profil pendant les 3 minutes. |
 
 ## Cycle de vie d'un devis

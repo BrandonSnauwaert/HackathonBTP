@@ -34,6 +34,7 @@ export function createLogMailer(logger: Logger): Mailer {
 export interface SmtpOptions {
   host: string;
   port: number;
+  /** Vide : pas d'authentification (MailHog). */
   login: string;
   password: string;
   /** Adresse d'expédition, sur un domaine authentifié chez le fournisseur SMTP. */
@@ -47,7 +48,7 @@ export function createSmtpMailer(options: SmtpOptions): Mailer & { verify(): Pro
     port: options.port,
     // 465 = TLS dès la connexion ; 587 = STARTTLS (chiffrement négocié ensuite).
     secure: options.port === 465,
-    auth: { user: options.login, pass: options.password },
+    ...(options.login ? { auth: { user: options.login, pass: options.password } } : {}),
   });
 
   return {
