@@ -30,6 +30,8 @@ const quotes = createQuoteService(db, {
   clipsDir: config.CLIPS_DIR,
   photosDir: config.PHOTOS_DIR,
   publicBaseUrl: config.PUBLIC_BASE_URL,
+  // Le seed n'envoie jamais d'e-mail.
+  mailer: { async send() {} },
 });
 
 const existing = findUserByEmail(db, DEMO_EMAIL);

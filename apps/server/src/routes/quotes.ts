@@ -11,6 +11,7 @@ import {
   QuoteCreateSchema,
   QuoteDetailSchema,
   QuoteDocumentSchema,
+  SendQuoteSchema,
   QuoteStatusSchema,
   QuoteSummarySchema,
   QuoteUpdateSchema,
@@ -134,16 +135,19 @@ export const quoteRoutes: FastifyPluginAsyncZod<{ quotes: QuoteService }> = asyn
       schema: {
         tags: quoteTags,
         security,
-        summary: "Envoyer le devis (il doit être « prêt à envoyer »)",
+        summary: "Envoyer le devis au client (il doit être « prêt à envoyer »)",
         description:
-          "Passe le devis en « envoyé » et rend son lien public (`publicUrl`) accessible. " +
-          "Le devis n'est plus modifiable. L'envoi par e-mail viendra s'y ajouter ; en attendant, " +
-          "l'artisan peut partager le lien lui-même.",
+          "Envoie un e-mail au client avec le lien du devis (bouton « Voir le devis »), réponse vers l'artisan, " +
+          "puis passe le devis en « envoyé » : il n'est plus modifiable et son lien public (`publicUrl`) devient " +
+          "accessible. Si l'e-mail échoue : 502 `email_failed` et le devis reste « prêt ».\n\n" +
+          "`byEmail: false` : aucun e-mail, l'artisan partage le lien lui-même (SMS, WhatsApp...).",
         params: IdParams,
-        response: { 200: QuoteDetailSchema, ...errors },
+        body: SendQuoteSchema,
+        response: { 200: QuoteDetailSchema, 502: ErrorResponseSchema, ...errors },
       },
     },
-    async (request) => quotes.send(requireUser(request).id, request.params.id),
+    async (request) =>
+      quotes.send(requireUser(request).id, request.params.id, { byEmail: request.body?.byEmail ?? true }),
   );
 
   app.get(

@@ -331,6 +331,17 @@
           }
         }
       },
+      "SendQuoteInput": {
+        "nullable": true,
+        "type": "object",
+        "properties": {
+          "byEmail": {
+            "default": true,
+            "description": "true : e-mail au client (par défaut) ; false : lien seul, partagé par l'artisan",
+            "type": "boolean"
+          }
+        }
+      },
       "AcceptQuoteInput": {
         "type": "object",
         "properties": {
@@ -1587,12 +1598,16 @@
                     },
                     "llm": {
                       "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "status",
                     "transcriber",
-                    "llm"
+                    "llm",
+                    "email"
                   ],
                   "additionalProperties": false
                 }
@@ -2624,11 +2639,21 @@
     },
     "/api/quotes/{id}/send": {
       "post": {
-        "summary": "Envoyer le devis (il doit être « prêt à envoyer »)",
+        "summary": "Envoyer le devis au client (il doit être « prêt à envoyer »)",
         "tags": [
           "Devis"
         ],
-        "description": "Passe le devis en « envoyé » et rend son lien public (`publicUrl`) accessible. Le devis n'est plus modifiable. L'envoi par e-mail viendra s'y ajouter ; en attendant, l'artisan peut partager le lien lui-même.",
+        "description": "Envoie un e-mail au client avec le lien du devis (bouton « Voir le devis »), réponse vers l'artisan, puis passe le devis en « envoyé » : il n'est plus modifiable et son lien public (`publicUrl`) devient accessible. Si l'e-mail échoue : 502 `email_failed` et le devis reste « prêt ».\n\n`byEmail: false` : aucun e-mail, l'artisan partage le lien lui-même (SMS, WhatsApp...).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendQuoteInput"
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -2688,6 +2713,16 @@
             }
           },
           "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
             "description": "Default Response",
             "content": {
               "application/json": {

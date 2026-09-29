@@ -58,7 +58,8 @@ export const api = {
   getQuote: (id: string) => request<QuoteDetail>("GET", `/quotes/${id}`),
   createQuote: (client: { name: string; email?: string }, title: string) =>
     request<QuoteDetail>("POST", "/quotes", { client, title }),
-  sendQuote: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/send`),
+  /** byEmail = false : aucun e-mail, l'artisan partage le lien lui-même. */
+  sendQuote: (id: string, byEmail = true) => request<QuoteDetail>("POST", `/quotes/${id}/send`, { byEmail }),
   previewDocument: (id: string) => request<QuoteDocument>("GET", `/quotes/${id}/document`),
   changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
 

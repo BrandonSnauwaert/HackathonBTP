@@ -243,6 +243,17 @@ export const QuoteDocumentSchema = z
   })
   .meta({ id: "QuoteDocument", description: "Le devis tel que le client le voit, avec les mentions légales" });
 
+export const SendQuoteSchema = z
+  .object({
+    byEmail: z
+      .boolean()
+      .default(true)
+      .describe("true : e-mail au client (par défaut) ; false : lien seul, partagé par l'artisan"),
+  })
+  // Corps facultatif : une requête sans corps arrive à null.
+  .nullish()
+  .meta({ id: "SendQuote" });
+
 export const AcceptQuoteSchema = z
   .object({
     name: z.string().trim().min(2).max(100).describe("Nom et prénom du client : vaut signature"),

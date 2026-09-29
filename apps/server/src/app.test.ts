@@ -11,6 +11,7 @@ import { buildApp } from "./app.js";
 import { parseConfig } from "./config.js";
 import { openDatabase } from "./db/database.js";
 import { mockLineExtractor, type LineExtractor } from "./llm/line-extractor.js";
+import type { EmailMessage, Mailer } from "./email/mailer.js";
 
 const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
 const photosDir = mkdtempSync(join(tmpdir(), "photos-"));
@@ -40,10 +41,29 @@ const flakyExtractor: LineExtractor & { failNext: boolean; gate: Promise<void> |
   },
 };
 
+/** Service d'e-mails de test : garde les messages au lieu de les envoyer, échoue si `failNext`. */
+const fakeMailer: Mailer & { sent: EmailMessage[]; failNext: boolean } = {
+  sent: [],
+  failNext: false,
+  async send(message) {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("SMTP indisponible");
+    }
+    this.sent.push(message);
+  },
+};
+
 let app: FastifyInstance;
 
 before(async () => {
-  app = await buildApp({ config, db: openDatabase(":memory:"), logger: false, extractor: flakyExtractor });
+  app = await buildApp({
+    config,
+    db: openDatabase(":memory:"),
+    logger: false,
+    extractor: flakyExtractor,
+    mailer: fakeMailer,
+  });
 });
 after(async () => {
   await app.close();
@@ -462,6 +482,7 @@ describe("API", () => {
         siret: "12345678900012",
         vatNumber: "FR12123456789",
         insurerName: "Assurance Exemple",
+        email: "contact@martin.test",
       });
       const quote = (
         await api("POST", "/api/quotes", {
@@ -590,6 +611,53 @@ describe("API", () => {
       res = await publicApi("POST", `${token}/decline`, {});
       assert.equal(res.statusCode, 409);
       assert.equal(res.json().error, "already_answered");
+    });
+
+    it("envoie l'e-mail au client, réponse vers l'artisan, avec le lien et le pixel", async () => {
+      const { api, quote } = await readyQuote("email@test.fr");
+      await api("PATCH", `/api/clients/${quote.client.id}`, { name: "<b>Mme</b> Durand" });
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      fakeMailer.sent.length = 0;
+
+      const sent = (await api("POST", `/api/quotes/${quote.id}/send`)).json();
+      assert.equal(sent.status, "sent");
+      assert.equal(fakeMailer.sent.length, 1);
+      const mail = fakeMailer.sent[0];
+      assert.ok(mail);
+      assert.deepEqual(mail.to, { address: "durand@example.com", name: "<b>Mme</b> Durand" });
+      assert.equal(mail.fromName, "Martin Rénovation");
+      assert.equal(mail.replyTo, "contact@martin.test");
+      assert.match(mail.subject, new RegExp(sent.number));
+      assert.ok(mail.html.includes(sent.publicUrl), "bouton Voir le devis");
+      assert.ok(mail.text.includes(sent.publicUrl), "version texte");
+      assert.ok(mail.html.includes(`/api/public/quotes/${tokenOf(sent.publicUrl)}/pixel.gif`), "pixel de suivi");
+      assert.ok(mail.html.includes("&lt;b&gt;Mme&lt;/b&gt; Durand"), "le HTML saisi est échappé");
+      assert.equal(mail.html.includes("<b>Mme</b>"), false);
+      assert.ok(sent.events.some((e: { type: string }) => e.type === "sent_by_email"));
+    });
+
+    it("garde le devis « prêt » si l'e-mail échoue", async () => {
+      const { api, quote } = await readyQuote("email-echec@test.fr");
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      fakeMailer.failNext = true;
+
+      const res = await api("POST", `/api/quotes/${quote.id}/send`);
+      assert.equal(res.statusCode, 502);
+      assert.equal(res.json().error, "email_failed");
+      const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+      assert.equal(detail.status, "ready");
+      assert.equal(detail.publicUrl, null, "lien toujours inaccessible");
+    });
+
+    it("envoie sans e-mail quand l'artisan partage le lien lui-même", async () => {
+      const { api, quote } = await readyQuote("lien-seul@test.fr");
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      fakeMailer.sent.length = 0;
+
+      const sent = (await api("POST", `/api/quotes/${quote.id}/send`, { byEmail: false })).json();
+      assert.equal(sent.status, "sent");
+      assert.ok(sent.publicUrl);
+      assert.equal(fakeMailer.sent.length, 0);
     });
 
     it("refuse un lien inconnu ou mal formé", async () => {

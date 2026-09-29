@@ -19,6 +19,8 @@ import { createClient, getClient, type Client, type ClientInput } from "../repos
 import { companyIssues, getCompany } from "../repositories/companies.js";
 import { getPhoto, listPhotos, toPhotoView, type PhotoView } from "../repositories/photos.js";
 import { buildQuoteDocument, quoteResponse, type QuoteDocument } from "./quote-document.js";
+import { EmailError, type Mailer } from "../email/mailer.js";
+import { buildQuoteEmail } from "../email/quote-email.js";
 import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
 import type { ExtractedLine } from "../llm/line-extractor.js";
@@ -33,6 +35,8 @@ export interface QuoteServiceOptions {
   photosDir: string;
   /** URL publique du front, pour construire le lien envoyé au client (ex. https://devis.mondomaine.fr). */
   publicBaseUrl: string;
+  /** Envoi des e-mails (SMTP, ou simple log). */
+  mailer: Mailer;
 }
 
 export type QuoteLineView = QuoteLine & { unitLabel: string; totalHtCents: number | null };
@@ -323,18 +327,54 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     },
 
     /**
-     * Envoie le devis : il passe en « envoyé », sa date devient la date d'envoi et son lien public
-     * devient accessible. (L'e-mail au client viendra se brancher ici.)
+     * Envoie le devis : e-mail au client (sauf `byEmail: false`, lien partagé à la main), puis le devis
+     * passe en « envoyé », daté du jour, et son lien public devient accessible.
+     * L'e-mail part AVANT de figer le devis : s'il échoue, le devis reste « prêt » et l'artisan est prévenu.
      */
-    send(userId: string, quoteId: string): QuoteDetail {
+    async send(userId: string, quoteId: string, { byEmail }: { byEmail: boolean }): Promise<QuoteDetail> {
       const quote = refresh(repo.getQuote(db, userId, quoteId));
       if (quote.status !== "ready") {
         const hint = quote.status === "draft" ? " : le passer d'abord en « prêt à envoyer »" : "";
         throw conflict("quote_not_ready", `Un devis « ${STATUS_LABELS[quote.status]} » ne peut pas être envoyé${hint}`);
       }
+
+      const sentAt = new Date().toISOString();
+      if (byEmail) {
+        const company = getCompany(db, userId);
+        const client = getClient(db, userId, quote.clientId);
+        const doc = documentOf(userId, { ...quote, sentAt }, false);
+        const email = buildQuoteEmail({
+          companyName: company.name,
+          companyPhone: company.phone,
+          clientName: client.name,
+          quoteNumber: quote.number,
+          title: quote.title,
+          totalTtcCents: doc.totals.totalTtcCents,
+          validUntil: doc.validUntil,
+          publicUrl: publicUrl(quote),
+          pixelUrl: `${options.publicBaseUrl.replace(/\/$/, "")}/api/public/quotes/${quote.publicToken}/pixel.gif`,
+        });
+        try {
+          await options.mailer.send({
+            to: { address: client.email, name: client.name },
+            fromName: company.name,
+            replyTo: company.email || undefined,
+            ...email,
+          });
+        } catch (err) {
+          const message = err instanceof EmailError ? err.message : "L'e-mail n'a pas pu être envoyé";
+          throw new HttpError(502, "email_failed", `${message}. Le devis n'a pas été envoyé.`);
+        }
+      }
+
       transaction(db, () => {
-        repo.updateQuote(db, quote.id, { status: "sent", sentAt: new Date().toISOString() });
-        repo.insertEvent(db, quote.id, { type: "sent", actor: "artisan", fromStatus: "ready", toStatus: "sent" });
+        repo.updateQuote(db, quote.id, { status: "sent", sentAt });
+        repo.insertEvent(db, quote.id, {
+          type: byEmail ? "sent_by_email" : "sent",
+          actor: "artisan",
+          fromStatus: "ready",
+          toStatus: "sent",
+        });
       });
       return detail(userId, quoteId);
     },

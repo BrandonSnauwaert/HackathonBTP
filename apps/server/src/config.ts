@@ -24,6 +24,16 @@ const EnvSchema = z
     PHOTOS_DIR: z.string().default("data/photos"),
     MAX_PHOTO_MB: z.coerce.number().positive().default(10),
 
+    // E-mails : « log » (par défaut) les écrit dans les logs sans les envoyer ; « smtp » les envoie.
+    EMAIL_PROVIDER: z.enum(["log", "smtp"]).default("log"),
+    /** Adresse d'expédition, sur le domaine authentifié chez le fournisseur (ex. devis@mondomaine.fr). */
+    EMAIL_FROM: z.string().default(""),
+    SMTP_SERVER: z.string().default(""),
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    SMTP_LOGIN: z.string().default(""),
+    /** Mot de passe SMTP (chez Brevo : la « clé SMTP »). */
+    SMTP_API_KEY: z.string().default(""),
+
     // Transcription
     TRANSCRIBER: z.enum(["mock", "kyutai"]).default("mock"),
     KYUTAI_URL: z.string().url().default("ws://localhost:8080/api/asr-streaming"),
@@ -43,6 +53,11 @@ const EnvSchema = z
   .superRefine((env, ctx) => {
     if (env.LLM_PROVIDER === "openai" && !env.LLM_MODEL) {
       ctx.addIssue({ code: "custom", path: ["LLM_MODEL"], message: "obligatoire quand LLM_PROVIDER=openai" });
+    }
+    if (env.EMAIL_PROVIDER === "smtp") {
+      for (const key of ["EMAIL_FROM", "SMTP_SERVER", "SMTP_LOGIN", "SMTP_API_KEY"] as const) {
+        if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "obligatoire quand EMAIL_PROVIDER=smtp" });
+      }
     }
   });
 

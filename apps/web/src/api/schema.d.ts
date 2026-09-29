@@ -32,6 +32,7 @@ export interface paths {
                             status: "ok";
                             transcriber: string;
                             llm: string;
+                            email: string;
                         };
                     };
                 };
@@ -971,8 +972,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Envoyer le devis (il doit être « prêt à envoyer »)
-         * @description Passe le devis en « envoyé » et rend son lien public (`publicUrl`) accessible. Le devis n'est plus modifiable. L'envoi par e-mail viendra s'y ajouter ; en attendant, l'artisan peut partager le lien lui-même.
+         * Envoyer le devis au client (il doit être « prêt à envoyer »)
+         * @description Envoie un e-mail au client avec le lien du devis (bouton « Voir le devis »), réponse vers l'artisan, puis passe le devis en « envoyé » : il n'est plus modifiable et son lien public (`publicUrl`) devient accessible. Si l'e-mail échoue : 502 `email_failed` et le devis reste « prêt ».
+         *
+         *     `byEmail: false` : aucun e-mail, l'artisan partage le lien lui-même (SMS, WhatsApp...).
          */
         post: {
             parameters: {
@@ -983,7 +986,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SendQuoteInput"];
+                };
+            };
             responses: {
                 /** @description Default Response */
                 200: {
@@ -1023,6 +1030,15 @@ export interface paths {
                 };
                 /** @description Default Response */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                502: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2448,6 +2464,13 @@ export interface components {
             caption?: string;
             visibleToClient?: boolean;
         };
+        SendQuoteInput: {
+            /**
+             * @description true : e-mail au client (par défaut) ; false : lien seul, partagé par l'artisan
+             * @default true
+             */
+            byEmail: boolean;
+        } | null;
         AcceptQuoteInput: {
             /** @description Nom et prénom du client : vaut signature */
             name: string;

@@ -128,9 +128,14 @@ export function QuoteView({ quoteId, onChanged }: { quoteId: string; onChanged: 
           </button>
         ))}
         {quote.status === "ready" && (
-          <button className="primary" onClick={() => void run(() => api.sendQuote(quote.id))}>
-            Envoyer le devis
-          </button>
+          <>
+            <button className="primary" onClick={() => void run(() => api.sendQuote(quote.id))}>
+              Envoyer par e-mail à {quote.client.email}
+            </button>
+            <button className="secondary" onClick={() => void run(() => api.sendQuote(quote.id, false))}>
+              Envoyer sans e-mail (lien seul)
+            </button>
+          </>
         )}
         <a className="secondary" href={`/apercu/${quote.id}`} target="_blank" rel="noreferrer">
           Aperçu du document ↗

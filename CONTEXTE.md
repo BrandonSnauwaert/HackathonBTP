@@ -73,7 +73,8 @@ L'artisan **dicte** ce qu'il faut faire, directement sur le chantier, même **sa
 | Infos client | Saisies dans un **formulaire**, pas dictées. | Plus fiable : une adresse e-mail dictée, c'est risqué. |
 | Suivi d'ouverture | Principal : un **bouton « Voir le devis »** qui mène à une page publique du devis. Secondaire : un pixel de suivi. | Le pixel n'est pas fiable : Apple Mail précharge les images (faux « ouvert »), et certains clients mail les bloquent. Le clic, lui, est certain. |
 | Stockage | **SQLite**, un seul fichier. | Suffisant pour un MVP, rien à installer. |
-| Hébergement de la démo | **Le PC de Thomas fait serveur.** Le téléphone y accède via un tunnel HTTPS (domaine disponible, à configurer). | Le GPU est sur ce PC. Le micro du navigateur exige HTTPS, et la page publique du devis doit être accessible depuis Internet. |
+| Hébergement de la démo | **Le PC de Thomas fait serveur.** Le téléphone y accède via un tunnel HTTPS gratuit (sans nom de domaine). | Le GPU est sur ce PC. Le micro du navigateur exige HTTPS, et la page publique du devis doit être accessible depuis Internet. |
+| E-mails | **Brevo en SMTP**, expéditeur `devis@homiesapp.fr` (domaine déjà authentifié chez Brevo, emprunté pour la démo). Nom affiché = l'entreprise de l'artisan, réponses vers l'artisan (`Reply-To`). | Pas de nom de domaine propre au projet ; celui-ci est déjà configuré (SPF/DKIM), donc les e-mails ne partent pas en indésirables. |
 | Compte de démo | Un **compte artisan fictif** pré-rempli (entreprise, SIRET, assurance…). | Pas de saisie de profil pendant les 3 minutes. |
 
 ## Cycle de vie d'un devis
@@ -129,5 +130,5 @@ Le devis affiche le total HT, la TVA par taux, puis le total TTC. Pour les auto-
 | **Prix :** catalogue prérempli (et lequel), tarifs de l'artisan, ou prix proposé puis corrigé ? Par défaut côté technique, un champ prix modifiable par ligne. | Brandon |
 | Modèle économique, marché, acquisition | Brandon, Ben |
 | Maquettes et identité visuelle | Aurélie, Olive |
-| Service d'envoi d'e-mails et configuration du domaine | Thomas |
+| Mise en place du tunnel HTTPS (adresse publique du front) | Thomas |
 | Fournisseur du LLM hébergé | Thomas |

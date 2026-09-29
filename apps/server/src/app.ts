@@ -18,6 +18,7 @@ import { HttpError } from "./http/errors.js";
 import { transformObject } from "./http/openapi.js";
 import { createLineExtractor } from "./llm/create-line-extractor.js";
 import type { LineExtractor } from "./llm/line-extractor.js";
+import { createMailer, type Mailer } from "./email/mailer.js";
 import { authRoutes } from "./routes/auth.js";
 import { clipRoutes } from "./routes/clips.js";
 import { photoRoutes } from "./routes/photos.js";
@@ -37,9 +38,11 @@ export interface AppOptions {
   logger?: boolean;
   /** Remplace l'extracteur choisi par LLM_PROVIDER (tests). */
   extractor?: LineExtractor;
+  /** Remplace le service d'e-mails choisi par EMAIL_PROVIDER (tests). */
+  mailer?: Mailer;
 }
 
-export async function buildApp({ config, db, logger = true, extractor }: AppOptions): Promise<FastifyInstance> {
+export async function buildApp({ config, db, logger = true, extractor, mailer }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -113,7 +116,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
         tags: ["Système"],
         summary: "État du serveur",
         response: {
-          200: z.object({ status: z.literal("ok"), transcriber: z.string(), llm: z.string() }),
+          200: z.object({ status: z.literal("ok"), transcriber: z.string(), llm: z.string(), email: z.string() }),
         },
       },
     },
@@ -121,6 +124,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
       status: "ok" as const,
       transcriber: config.TRANSCRIBER,
       llm: config.LLM_PROVIDER === "mock" ? "mock" : config.LLM_MODEL,
+      email: config.EMAIL_PROVIDER === "log" ? "log (aucun envoi)" : `smtp ${config.SMTP_SERVER}`,
     }),
   );
 
@@ -129,6 +133,7 @@ export async function buildApp({ config, db, logger = true, extractor }: AppOpti
     clipsDir: config.CLIPS_DIR,
     photosDir: config.PHOTOS_DIR,
     publicBaseUrl: config.PUBLIC_BASE_URL,
+    mailer: mailer ?? createMailer(config, app.log),
   });
   const clips = createClipService({
     db,

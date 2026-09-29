@@ -21,6 +21,7 @@ apps/server/            API Node.js (Fastify, TypeScript)
   src/auth/             mots de passe (scrypt) et session par cookie
   src/transcription/    interface Transcriber, mock, Kyutai, transcription d'un clip complet
   src/llm/              interface LlmClient, client compatible OpenAI, extraction des lignes de devis (prompt)
+  src/email/            envoi d'e-mails (log ou SMTP, Nodemailer) et e-mail d'envoi du devis
   src/audio/            format audio interne (PCM s16le mono 24 kHz), lecture / écriture WAV
   src/images/           reconnaissance du type d'image (JPEG, PNG, WebP) par son contenu
   scripts/              seed de démo, clients de test (WebSocket, navigateur headless)
@@ -54,7 +55,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Client LLM compatible OpenAI et extraction des lignes (JSON validé par zod, seconde tentative si invalide)
 - [x] Photos de chantier : ajout (renvoi sans doublon), légende, visibilité client, suppression ; réduites sur l'appareil
 - [x] Envoi du devis (lien public) et page client : document avec mentions légales, « Accepter » / « Refuser », impression PDF, suivi (consulté, pixel)
-- [ ] Envoi par e-mail (service à choisir, domaine à configurer)
+- [x] Envoi du devis par e-mail (SMTP Brevo ; mode « log » par défaut, sans envoi)
+- [ ] Tunnel HTTPS pour que le lien de l'e-mail et le micro fonctionnent depuis un téléphone
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [ ] Front définitif : liste des devis, écran d'édition (en attente des maquettes UI/UX)
@@ -144,7 +146,8 @@ Pour **ajouter une route** : schémas zod dans `src/http/schemas.ts` (avec `.met
 **Photos** : `POST /api/quotes/:id/photos`, corps image brut (JPEG, PNG ou WebP, avec son `Content-Type`), `clientPhotoId` pour un renvoi sans doublon, `takenAt`, `caption`. Le type est **vérifié sur le contenu du fichier** (pas sur le `Content-Type`). Taille maximale `MAX_PHOTO_MB` (10 Mo). Le front **réduit les photos à 1600 px avant l'envoi** (`apps/web/src/images/resizeImage.ts`). `visibleToClient` vaut `false` par défaut : la photo est une note interne tant que l'artisan ne la partage pas. Fichiers dans `PHOTOS_DIR`, supprimés avec la photo ou avec le devis.
 
 **Envoi et page client** :
-- `POST /api/quotes/:id/send` : un devis `ready` passe en `sent` (figé) et reçoit son lien public `publicUrl` = `PUBLIC_BASE_URL/d/<secret>`. L'e-mail viendra se brancher dans cette action.
+- `POST /api/quotes/:id/send` : e-mail au client (bouton « Voir le devis », pixel, `Reply-To` = e-mail de l'artisan), **puis** le devis `ready` passe en `sent` (figé) avec son lien public `publicUrl` = `PUBLIC_BASE_URL/d/<secret>`. Si l'e-mail échoue : 502 `email_failed` et le devis reste `ready`. `{ "byEmail": false }` : pas d'e-mail, lien partagé à la main.
+- **E-mails** : `EMAIL_PROVIDER=log` par défaut (l'e-mail est écrit dans les logs, rien ne part : développement, tests, équipe sans identifiants). `EMAIL_PROVIDER=smtp` + `SMTP_SERVER`, `SMTP_PORT`, `SMTP_LOGIN`, `SMTP_API_KEY`, `EMAIL_FROM` pour un envoi réel (Brevo). Au démarrage en SMTP, la connexion est vérifiée sans rien envoyer (voir les logs).
 - Routes publiques **sans connexion** sous `/api/public/quotes/:token` : ouverture, `accept` (nom obligatoire, vaut signature), `decline`, photos partagées, `pixel.gif`. Un devis non envoyé n'y est jamais accessible (404).
 - Le document public (`QuoteDocument`) ne contient **rien d'interne** : ni notes, ni dictées, ni points à compléter, ni photos non partagées. Un test le vérifie.
 - **« Consulté » = ouverture de la page par le client.** Le pixel de l'e-mail ne fait qu'ajouter un événement `email_opened` à l'historique, car Apple Mail précharge les images.
