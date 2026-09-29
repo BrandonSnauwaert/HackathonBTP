@@ -1,0 +1,35 @@
+#!/bin/sh
+# Vérifications avant chaque commit : formatage, analyse du code, types, tests.
+# Seule l'application touchée par le commit est vérifiée (environ 10 s).
+# Activé automatiquement par `npm install` (git config core.hooksPath .githooks).
+# Urgence absolue uniquement : git commit --no-verify
+
+staged=$(git diff --cached --name-only --diff-filter=ACMRD)
+root=$(git rev-parse --show-toplevel)
+failed=0
+
+check() {
+  app=$1
+  if echo "$staged" | grep -q "^apps/$app/"; then
+    if [ ! -d "$root/apps/$app/node_modules" ]; then
+      echo "✖ apps/$app : dépendances absentes, lancer \`npm install\` dans apps/$app"
+      failed=1
+      return
+    fi
+    echo "▶ Vérification de apps/$app"
+    if ! (cd "$root/apps/$app" && npm run --silent check); then
+      echo "✖ apps/$app : vérifications en échec (voir ci-dessus)"
+      failed=1
+    fi
+  fi
+}
+
+check server
+check web
+
+if [ "$failed" -ne 0 ]; then
+  echo ""
+  echo "Commit refusé. Corriger puis recommiter."
+  echo "Formatage automatique : npm run format (dans l'application concernée)."
+  exit 1
+fi

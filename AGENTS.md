@@ -25,14 +25,16 @@ apps/server/            API Node.js (Fastify, TypeScript)
   scripts/              seed de démo, clients de test (WebSocket, navigateur headless)
   samples/              audio de test (chantier-fr.wav)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
+  openapi.json          doc OpenAPI exportée (générée : npm run openapi)
 apps/web/               PWA React (Vite, TypeScript) — pour l'instant des pages de test, en attendant les maquettes
   public/pcm-recorder-worklet.js   capture micro vers PCM 24 kHz
-  src/api/              client de l'API (fetch + types recopiés de /docs)
+  src/api/              client de l'API ; schema.d.ts = types générés depuis openapi.json
   src/audio/            micro (AudioWorklet), enregistrement talkie-walkie (useClipRecorder), encodage WAV
   src/test-console/     page de test « Devis & dictées » : connexion, devis, lignes, dictées
   src/live/             page de test « Transcription live » (WebSocket)
 services/kyutai-stt/    image Docker moshi-server + config du modèle STT
 docker-compose.yml      lance kyutai-stt (GPU)
+.githooks/pre-commit    vérifications automatiques avant chaque commit
 CONTEXTE.md             besoin, périmètre, décisions (source de vérité produit)
 ```
 
@@ -66,6 +68,18 @@ Tenir cette liste à jour quand une étape est terminée.
 | Base de données | SQLite via `node:sqlite` (intégré à Node, pas de dépendance native). Le warning « experimental » est attendu. |
 | LLM | API hébergée, fournisseur à choisir, derrière une interface interne (comme `Transcriber`) |
 
+## Première installation (nouveau contributeur)
+
+```powershell
+git clone https://github.com/BrandonSnauwaert/HackathonBTP.git
+cd HackathonBTP
+cd apps/server; npm install; copy .env.example .env; npm run seed:demo
+cd ../web; npm install
+```
+
+- `npm install` **active les hooks git** du dépôt (`.githooks/`) : chaque commit est vérifié automatiquement (voir « Vérifier son travail »).
+- Sans GPU NVIDIA : laisser `TRANSCRIBER=mock` et `LLM_PROVIDER=mock` dans `.env`. Tout fonctionne, avec une transcription et une extraction simulées.
+
 ## Lancer le projet
 
 Machine de dev : Windows et PowerShell. Pour définir une variable d'environnement, `$env:VAR="x"; commande`, ou passer par le `.env`.
@@ -78,19 +92,23 @@ docker compose up -d kyutai-stt          # à la racine ; arrêt : docker compos
 cd apps/server; npm run seed:demo   # (ré)initialise le compte demo@artisan.test / demo1234
 npm run dev                          # doc interactive de l'API : http://localhost:3000/docs
 
-# 3. Front (port 5173, fait proxy de /ws vers :3000)
+# 3. Front (port 5173, fait proxy de /api, /docs et /ws vers :3000)
 cd apps/web; npm run dev
 ```
 
 ## Vérifier son travail
 
-Une tâche n'est **pas terminée** tant que ces vérifications ne passent pas :
+**Hook git `pre-commit`** (`.githooks/pre-commit`) : à chaque commit, `npm run check` est lancé dans l'application touchée (`apps/server` et/ou `apps/web`), en ~10 s. **Si une vérification échoue, le commit est refusé.** Ne pas contourner avec `--no-verify` : corriger. Pour les agents : lancer `npm run check` **avant** de commiter.
 
 | Commande | Où | Rôle |
 |---|---|---|
+| `npm run check` | apps/server | tout : formatage, analyse du code, types, tests, doc OpenAPI à jour (= hook) |
+| `npm run check` | apps/web | tout : formatage, analyse du code, types et build (= hook) |
+| `npm run format` | les deux | reformate automatiquement le code (Prettier) |
+| `npm run lint` | les deux | analyse du code (oxlint) |
 | `npm run typecheck` | apps/server | types du serveur et des scripts |
 | `npm test` | apps/server | tests unitaires (domaine) et d'intégration (API sur SQLite en mémoire) |
-| `npm run build` | apps/web | types et build du front |
+| `npm run openapi` | apps/server | après un changement d'API : met à jour `openapi.json` et régénère les types du front |
 | `npm run test:ws -- samples/chantier-fr.wav` | apps/server | streame le WAV au serveur lancé, affiche les transcriptions |
 | `npm run e2e:dictation` | apps/server | Chrome headless, micro simulé par le WAV : crée un devis sur le compte de démo, maintient le bouton talkie-walkie, affiche transcription et lignes (`SCREENSHOT=x.png` pour une capture) |
 | `npm run e2e -- http://localhost:5173 samples/chantier-fr.wav 20000` | apps/server | idem pour la page « Transcription live » |
@@ -99,9 +117,16 @@ Une tâche n'est **pas terminée** tant que ces vérifications ne passent pas :
 - Toute nouvelle route doit être couverte dans `src/app.test.ts` (via `app.inject`, sans serveur réel).
 - Pour un changement visible à l'écran, le vérifier dans le navigateur (ou avec le script e2e), pas seulement au typecheck.
 
+## Travailler à plusieurs
+
+- **Une branche par fonctionnalité** (`feat/envoi-email`, `fix/dernier-mot`…), des commits petits et fréquents. Avant de pousser : `git pull --rebase origin main`. Jamais de `git push --force` sur `main`.
+- **Frontière front / serveur = l'API documentée.** Les types du front (`apps/web/src/api/schema.d.ts`) sont **générés** depuis `apps/server/openapi.json`, lui-même généré depuis le code : ne jamais les écrire à la main. Qui change l'API lance `npm run openapi` (dans apps/server) et commite les deux fichiers générés. Le hook refuse un `openapi.json` pas à jour.
+- **Style** : Prettier décide (config dans `.prettierrc.json`, 120 colonnes). Pas de débat de formatage, `npm run format` et c'est réglé.
+- Conflit sur un fichier généré (`openapi.json`, `schema.d.ts`) : ne pas le résoudre à la main, relancer `npm run openapi`.
+
 ## Contrats existants (ne pas casser sans prévenir)
 
-**API REST**, sous `/api`. La référence est la doc générée sur **`/docs`** (JSON brut : `/docs/json`), à partir des schémas zod de `src/http/schemas.ts`.
+**API REST**, sous `/api`. La référence est la doc générée sur **`/docs`** (JSON brut : `/docs/json`, copie versionnée : `apps/server/openapi.json`), à partir des schémas zod de `src/http/schemas.ts`.
 - **Authentification** : `POST /api/auth/login` pose un cookie `sid` (httpOnly). Les autres routes répondent 401 sans lui.
 - **Erreurs** : toujours `{ error, message, details? }`. `error` est un code stable (`validation`, `unauthorized`, `not_found`, `quote_incomplete`, `invalid_transition`, `quote_locked`…), `message` est en français et affichable tel quel.
 - **Réponses de devis** : toute modification (lignes, infos, statut) renvoie le **devis complet** (`QuoteDetail`), avec les totaux recalculés, les points manquants (`issues`) et les transitions possibles (`allowedTransitions`). Le front n'a jamais à recalculer.

@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+package-lock.json
+samples
+# Fichiers générés
+openapi.json
+src/api/schema.d.ts
