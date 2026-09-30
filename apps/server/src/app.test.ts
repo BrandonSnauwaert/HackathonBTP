@@ -516,7 +516,7 @@ describe("API", () => {
       const sent = res.json();
       assert.equal(sent.status, "sent");
       assert.ok(sent.sentAt);
-      assert.match(sent.publicUrl, /^http:\/\/localhost:5173\/d\/[A-Za-z0-9_-]{20,}$/);
+      assert.match(sent.publicUrl, /^http:\/\/localhost:5174\/d\/[A-Za-z0-9_-]{20,}$/);
 
       res = await api("PATCH", `/api/quotes/${quote.id}`, { title: "Modifié" });
       assert.equal(res.statusCode, 409, "un devis envoyé n'est plus modifiable");
