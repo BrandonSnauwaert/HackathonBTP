@@ -1,26 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { Client } from "../api/types";
+import { oneLine, suggestClients } from "../clients/clients";
 import { errorMessage } from "../quotes/useQuote";
 import { navigate } from "../router";
-
-/** Recherche sans tenir compte des accents ni de la casse : « lefevre » trouve « M. Lefèvre ». */
-const normalize = (text: string) =>
-  text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-
-const MAX_SUGGESTIONS = 5;
-
-/** Adresse du client (sur plusieurs lignes) → champ « Adresse du chantier » (une ligne). */
-const oneLine = (address: string) =>
-  address
-    .split("\n")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(", ");
 
 /**
  * Infos du client, saisies au clavier avant la visite (une adresse e-mail dictée, c'est risqué).
@@ -43,13 +26,7 @@ export function NewVisitSheet({ onClose, client: preset }: { onClose: () => void
     api.listClients().then(setClients, () => undefined);
   }, []);
 
-  const query = normalize(name);
-  const suggestions =
-    selected || query.length === 0
-      ? []
-      : clients
-          .filter((c) => normalize(c.name).includes(query) || normalize(c.email).includes(query))
-          .slice(0, MAX_SUGGESTIONS);
+  const suggestions = selected ? [] : suggestClients(clients, name);
 
   const pick = (client: Client) => {
     setSelected(client);

@@ -70,13 +70,11 @@ async function reload() {
 
 // --- Envoi
 
-let syncing = false;
-
-/** Envoie les dictées en attente, dans l'ordre ; s'arrête à la première coupure réseau. */
-export async function syncClips(): Promise<void> {
-  if (syncing) return;
-  syncing = true;
+/** Un seul passage d'envoi à la fois. */
+async function syncOnce(): Promise<void> {
   try {
+    // Relue à chaque fois : la file stockée sur le téléphone fait foi (page rouverte, autre onglet).
+    await reload();
     for (const clip of state.clips.filter((c) => c.error === null)) {
       setState({ sending: clip.clientClipId });
       try {
@@ -95,11 +93,36 @@ export async function syncClips(): Promise<void> {
       }
     }
   } finally {
-    syncing = false;
     setState({ sending: null });
     await reload();
   }
 }
+
+let running: Promise<void> | null = null;
+let rerun = false;
+
+/**
+ * Envoie les dictées en attente, dans l'ordre ; s'arrête à la première coupure réseau.
+ * Demandé pendant un envoi (nouvelle dictée, retour du réseau), un nouveau passage suit aussitôt.
+ */
+export function syncClips(): Promise<void> {
+  if (running) {
+    rerun = true;
+    return running;
+  }
+  running = (async () => {
+    do {
+      rerun = false;
+      await syncOnce();
+    } while (rerun);
+  })().finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+/** Se résout quand aucun envoi n'est en cours (tests). */
+export const syncIdle = (): Promise<void> => running ?? Promise.resolve();
 
 /** Ajoute une dictée à la file, puis tente l'envoi. */
 export async function enqueueClip(clip: Omit<QueuedClip, "clientClipId" | "error">): Promise<void> {
@@ -141,6 +164,9 @@ const subscribe = (listener: () => void) => {
 export function useClipQueue(): QueueState {
   return useSyncExternalStore(subscribe, () => state);
 }
+
+/** État courant de la file, hors React (tests). */
+export const queueState = (): QueueState => state;
 
 /** À appeler une fois au démarrage : relit la file et l'envoie au retour du réseau. */
 export function startClipSync() {

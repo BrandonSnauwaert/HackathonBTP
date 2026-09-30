@@ -11,8 +11,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "api:types": "npx --yes openapi-typescript@7.13.0 ../server/openapi.json -o src/api/schema.d.ts",
-    "check": "npm run format:check && npm run lint && npm run build",
-    "prepare": "git config core.hooksPath .githooks || exit 0"
+    "check": "npm run format:check && npm run lint && npm test && npm run build",
+    "prepare": "git config core.hooksPath .githooks || exit 0",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -23,9 +24,11 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "fake-indexeddb": "^6.2.5",
     "oxlint": "^1.81.0",
     "prettier": "^3.9.9",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.2"
   }
 }

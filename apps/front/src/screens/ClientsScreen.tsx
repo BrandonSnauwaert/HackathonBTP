@@ -3,39 +3,11 @@ import { api } from "../api/client";
 import type { Client, QuoteSummary } from "../api/types";
 import { QuoteRow } from "../components/QuoteRow";
 import { formatCents, formatRelative, initials } from "../format";
-import { activityDate } from "../quotes/status";
+import { clientStats, searchClients } from "../clients/clients";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { ClientSheet } from "./ClientSheet";
 import { NewVisitSheet } from "./NewVisitSheet";
-
-const WAITING = new Set(["sent", "viewed", "follow_up"]);
-
-const normalize = (text: string) =>
-  text
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-
-interface ClientStats {
-  quotes: QuoteSummary[];
-  acceptedHtCents: number;
-  waiting: number;
-  /** Dernière activité sur l'un de ses devis, ou création de la fiche. */
-  lastActivity: string;
-}
-
-function statsOf(client: Client, quotes: QuoteSummary[]): ClientStats {
-  const own = quotes
-    .filter((q) => q.client.id === client.id)
-    .sort((a, b) => activityDate(b).localeCompare(activityDate(a)));
-  return {
-    quotes: own,
-    acceptedHtCents: own.filter((q) => q.status === "accepted").reduce((sum, q) => sum + q.totalHtCents, 0),
-    waiting: own.filter((q) => WAITING.has(q.status)).length,
-    lastActivity: own[0] ? activityDate(own[0]) : client.updatedAt,
-  };
-}
 
 /** Clients et devis, rechargés ensemble (les chiffres de chaque client viennent de ses devis). */
 function useClientsData() {
@@ -68,12 +40,9 @@ export function ClientsScreen() {
   const { clients, quotes, error } = useClientsData();
   const [search, setSearch] = useState("");
 
-  const query = normalize(search.trim());
-  const rows = (clients ?? [])
-    .map((client) => ({ client, stats: statsOf(client, quotes) }))
-    .filter(({ client }) =>
-      [client.name, client.email, client.phone, client.address].some((field) => normalize(field).includes(query)),
-    )
+  const query = search.trim();
+  const rows = searchClients(clients ?? [], query)
+    .map((client) => ({ client, stats: clientStats(client, quotes) }))
     .sort((a, b) => b.stats.lastActivity.localeCompare(a.stats.lastActivity));
 
   return (
@@ -141,7 +110,7 @@ export function ClientScreen({ clientId }: { clientId: string }) {
     return <p className="loading">{clients === null ? (error ?? "Chargement…") : "Client introuvable."}</p>;
   }
 
-  const stats = statsOf(client, quotes);
+  const stats = clientStats(client, quotes);
   const quoteLabel = (q: QuoteSummary) => (q.title ? `${q.title} · ${q.number}` : q.number);
 
   return (
