@@ -73,8 +73,12 @@ export const api = {
 
   listQuotes: () => request<QuoteSummary[]>("GET", "/quotes"),
   getQuote: (id: string) => request<QuoteDetail>("GET", `/quotes/${id}`),
-  createQuote: (client: { name: string; email?: string; phone?: string }, title: string, siteAddress: string) =>
-    request<QuoteDetail>("POST", "/quotes", { client, title, siteAddress }),
+  /** Pour un client existant (`clientId`) ou nouveau (`client`, créé en même temps que le devis). */
+  createQuote: (
+    who: { clientId: string } | { client: { name: string; email?: string; phone?: string } },
+    title: string,
+    siteAddress: string,
+  ) => request<QuoteDetail>("POST", "/quotes", { ...who, title, siteAddress }),
   updateQuote: (id: string, update: QuoteUpdate) => request<QuoteDetail>("PATCH", `/quotes/${id}`, update),
   /** Document tel que le client le verra (aperçu de l'artisan, sans suivi). */
   previewDocument: (id: string) => request<QuoteDocument>("GET", `/quotes/${id}/document`),
@@ -107,6 +111,7 @@ export const api = {
     request<Photo>("PATCH", `/quotes/${quoteId}/photos/${photoId}`, update),
   deletePhoto: (quoteId: string, photoId: string) => request<null>("DELETE", `/quotes/${quoteId}/photos/${photoId}`),
 
+  listClients: () => request<Client[]>("GET", "/clients"),
   updateClient: (id: string, update: { name?: string; email?: string; phone?: string; address?: string }) =>
     request<Client>("PATCH", `/clients/${id}`, update),
 

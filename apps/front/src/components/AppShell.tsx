@@ -48,6 +48,12 @@ export function AppShell({ session, route, children }: { session: Session; route
         <button className={`nav ${route.name === "home" ? "on" : ""}`} onClick={() => navigate({ name: "home" })}>
           Accueil
         </button>
+        <button
+          className={`nav ${route.name === "clients" || route.name === "client" ? "on" : ""}`}
+          onClick={() => navigate({ name: "clients" })}
+        >
+          Clients
+        </button>
         <button className={`nav ${route.name === "profile" ? "on" : ""}`} onClick={() => navigate({ name: "profile" })}>
           Mon entreprise
         </button>

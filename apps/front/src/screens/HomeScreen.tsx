@@ -2,19 +2,71 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { QuoteSummary } from "../api/types";
 import { Logo, type Session } from "../components/AppShell";
-import { StatusBadge } from "../components/Badge";
-import { formatCents, formatRelative, formatToday, initials } from "../format";
-import { FILTERS, isEditable, openQuote, quoteName, type FilterId } from "../quotes/status";
+import { formatCents, formatToday, initials } from "../format";
+import { FILTERS, activityDate, isEditable, openQuote, quoteName, type FilterId } from "../quotes/status";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { NewVisitSheet } from "./NewVisitSheet";
+import { QuoteRow } from "../components/QuoteRow";
 
 const WAITING = new Set(["sent", "viewed", "follow_up"]);
 const HOME_POLL_MS = 5000;
 
-function activity(q: QuoteSummary): string {
-  if (q.status === "sent" && q.sentAt) return `Envoyé ${formatRelative(q.sentAt)}`;
-  return `Mis à jour ${formatRelative(q.updatedAt)}`;
+/** Par défaut : les devis à relancer d'abord (action attendue), puis la dernière activité. */
+type SortId = "priority" | "amount-desc" | "amount-asc" | "activity-desc" | "activity-asc";
+
+const SORTS: { id: SortId; label: string }[] = [
+  { id: "priority", label: "À relancer d'abord" },
+  { id: "activity-desc", label: "Activité : récente d'abord" },
+  { id: "activity-asc", label: "Activité : ancienne d'abord" },
+  { id: "amount-desc", label: "Montant TTC : décroissant" },
+  { id: "amount-asc", label: "Montant TTC : croissant" },
+];
+
+const byActivity = (a: QuoteSummary, b: QuoteSummary) => activityDate(b).localeCompare(activityDate(a));
+
+function compare(sort: SortId): (a: QuoteSummary, b: QuoteSummary) => number {
+  switch (sort) {
+    case "priority":
+      return (a, b) => Number(b.status === "follow_up") - Number(a.status === "follow_up") || byActivity(a, b);
+    case "activity-desc":
+      return byActivity;
+    case "activity-asc":
+      return (a, b) => byActivity(b, a);
+    case "amount-desc":
+      return (a, b) => b.totalTtcCents - a.totalTtcCents || byActivity(a, b);
+    case "amount-asc":
+      return (a, b) => a.totalTtcCents - b.totalTtcCents || byActivity(a, b);
+  }
+}
+
+/** Clic sur un en-tête de colonne : décroissant, puis croissant, puis retour au tri par défaut. */
+function nextSort(current: SortId, column: "amount" | "activity"): SortId {
+  if (current === `${column}-desc`) return `${column}-asc`;
+  if (current === `${column}-asc`) return "priority";
+  return `${column}-desc`;
+}
+
+function SortHeader(props: {
+  label: string;
+  column: "amount" | "activity";
+  sort: SortId;
+  onSort: (s: SortId) => void;
+  className?: string;
+}) {
+  const { label, column, sort, onSort } = props;
+  const direction = sort === `${column}-desc` ? "descending" : sort === `${column}-asc` ? "ascending" : "none";
+  return (
+    <button
+      type="button"
+      className={`th-sort ${direction !== "none" ? "on" : ""} ${props.className ?? ""}`}
+      aria-label={`Trier par ${label.toLowerCase()}`}
+      onClick={() => onSort(nextSort(sort, column))}
+    >
+      {label}
+      <span aria-hidden="true">{direction === "descending" ? " ↓" : direction === "ascending" ? " ↑" : " ↕"}</span>
+    </button>
+  );
 }
 
 /** E1 — Accueil : ce qui demande une action, quelques chiffres, la liste des devis. */
@@ -23,6 +75,7 @@ export function HomeScreen({ session }: { session: Session }) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterId>("all");
   const [creating, setCreating] = useState(false);
+  const [sort, setSort] = useState<SortId>("priority");
 
   // Rafraîchie régulièrement : les statuts changent quand le client ouvre ou accepte un devis.
   useEffect(() => {
@@ -39,7 +92,7 @@ export function HomeScreen({ session }: { session: Session }) {
     return () => clearInterval(timer);
   }, []);
 
-  const all = quotes ?? [];
+  const all = [...(quotes ?? [])].sort(compare(sort));
   const statuses = FILTERS.find((f) => f.id === filter)?.statuses ?? null;
   const shown = statuses ? all.filter((q) => (statuses as readonly string[]).includes(q.status)) : all;
   const toFollowUp = all.filter((q) => q.status === "follow_up");
@@ -57,9 +110,14 @@ export function HomeScreen({ session }: { session: Session }) {
             <Logo />
             <span className="b">Devis Vocal</span>
           </div>
-          <button className="ic avatar" onClick={() => navigate({ name: "profile" })} title="Mon entreprise">
-            {initials(companyName)}
-          </button>
+          <div className="row start">
+            <button className="btn ghost" onClick={() => navigate({ name: "clients" })}>
+              Clients
+            </button>
+            <button className="ic avatar" onClick={() => navigate({ name: "profile" })} title="Mon entreprise">
+              {initials(companyName)}
+            </button>
+          </div>
         </div>
         <div className="row">
           <div>
@@ -132,26 +190,30 @@ export function HomeScreen({ session }: { session: Session }) {
               </button>
             ))}
           </div>
+          {/* Sur téléphone, pas d'en-têtes de colonnes : le tri passe par une liste. */}
+          <label className="sort-select only-mobile">
+            <span className="mut small">Trier</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortId)}>
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="qlist">
-          <div className="qrow th only-desktop" aria-hidden="true">
+          <div className="qrow th only-desktop">
             <span>Devis</span>
-            <span className="r">Montant TTC</span>
+            <SortHeader label="Montant TTC" column="amount" sort={sort} onSort={setSort} className="r" />
             <span>Statut</span>
-            <span>Dernière activité</span>
+            <SortHeader label="Dernière activité" column="activity" sort={sort} onSort={setSort} />
           </div>
           {quotes === null && !error && <p className="mut">Chargement…</p>}
           {quotes !== null && shown.length === 0 && <p className="mut empty">Aucun devis ici.</p>}
           {shown.map((q) => (
-            <button key={q.id} className="qrow card" onClick={() => openQuote(q)}>
-              <span className="q-name b">{quoteName(q)}</span>
-              <span className="q-amount b r">{formatCents(q.totalTtcCents)}</span>
-              <span className="q-status">
-                <StatusBadge status={q.status} label={q.statusLabel} />
-              </span>
-              <span className="q-activity mut small">{activity(q)}</span>
-            </button>
+            <QuoteRow key={q.id} quote={q} name={quoteName(q)} />
           ))}
         </div>
       </div>

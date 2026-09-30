@@ -4,7 +4,7 @@ import "./index.css";
 import App from "./App.tsx";
 import { startClipSync } from "./offline/clipQueue";
 import PublicQuotePage, { type PublicQuoteSource } from "./public-quote/PublicQuotePage";
-import { applyTheme, initTheme } from "./theme";
+import { initTheme } from "./theme";
 
 /**
  * Deux applications sur la même origine :
@@ -22,11 +22,9 @@ function publicSource(path: string): PublicQuoteSource | null {
 
 const source = publicSource(window.location.pathname);
 
-if (source) {
-  // Le devis est un document, imprimable tel quel : toujours en clair.
-  applyTheme("light");
-} else {
-  initTheme();
+// Page client et aperçu suivent aussi le thème (celui de l'appareil ; l'impression reste en clair).
+initTheme();
+if (!source) {
   startClipSync();
   // Le service worker garde l'application en cache : elle s'ouvre même sans réseau, sur le chantier.
   if ("serviceWorker" in navigator) {

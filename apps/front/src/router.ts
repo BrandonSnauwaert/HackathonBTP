@@ -4,6 +4,8 @@ import { useSyncExternalStore } from "react";
 export type Route =
   | { name: "home" }
   | { name: "profile" }
+  | { name: "clients" }
+  | { name: "client"; id: string }
   | { name: "visit"; id: string }
   | { name: "quote"; id: string }
   | { name: "send"; id: string }
@@ -12,6 +14,7 @@ export type Route =
 export function parseRoute(hash: string): Route {
   const [screen, id, sub] = hash.replace(/^#\/?/, "").split("/");
   if (screen === "profil") return { name: "profile" };
+  if (screen === "clients") return id ? { name: "client", id } : { name: "clients" };
   if (screen === "visite" && id) return { name: "visit", id };
   if (screen === "devis" && id) {
     if (sub === "envoi") return { name: "send", id };
@@ -27,6 +30,10 @@ export function routePath(route: Route): string {
       return "#/";
     case "profile":
       return "#/profil";
+    case "clients":
+      return "#/clients";
+    case "client":
+      return `#/clients/${route.id}`;
     case "visit":
       return `#/visite/${route.id}`;
     case "quote":

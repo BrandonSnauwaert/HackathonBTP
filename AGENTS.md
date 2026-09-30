@@ -29,7 +29,7 @@ apps/server/            API Node.js (Fastify, TypeScript)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
   openapi.json          doc OpenAPI exportée (générée : npm run openapi)
 apps/front/             application de l'artisan (React, Vite), d'après la maquette « Devis Vocal » (claude.ai/design)
-  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), mon entreprise, connexion ; fiches (client, nouvelle ligne)
+  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), clients et fiche client, mon entreprise, connexion ; fiches (client, nouvelle ligne)
   src/components/       cadre (barre latérale sur ordinateur, bandeau hors connexion), badges, bouton talkie-walkie, ligne de devis, totaux
   src/quotes/           useQuote (chargement, modifications, dictées, rafraîchissement, cache hors connexion), statuts, unités
   src/offline/          file des dictées hors connexion (IndexedDB), envoi au retour du réseau
@@ -70,7 +70,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, e-mail ou lien seul), suivi (ouverture, réponse du client, lien, renvoi de l'e-mail, relance, accepté / refusé). Mobile et ordinateur.
 - [x] Front : page client (E6) au style de la maquette et aperçu du document, ajout et modification complète des lignes, fiche client modifiable, suivi et accueil rafraîchis tout seuls, profil entreprise (« Mon entreprise »). `PUBLIC_BASE_URL` pointe désormais sur `apps/front` (5174).
-- [x] Front : thème sombre (suit le téléphone, ou forcé dans « Mon entreprise » ; la page client reste en clair)
+- [x] Front : page « Clients » (recherche, fiche avec ses devis et chiffres, nouveau devis sans ressaisie), clients existants proposés dans « Nouvelle visite », tri des devis (montant TTC, dernière activité), notes de chantier et dictées consultables sur un devis envoyé
+- [x] Front : thème sombre (suit le téléphone, ou forcé dans « Mon entreprise », page client comprise ; impression toujours en clair)
 - [ ] Bonus : PDF conforme, photos, relances automatiques
 
 Tenir cette liste à jour quand une étape est terminée.
