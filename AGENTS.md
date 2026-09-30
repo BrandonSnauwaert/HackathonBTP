@@ -29,7 +29,7 @@ apps/server/            API Node.js (Fastify, TypeScript)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
   openapi.json          doc OpenAPI exportée (générée : npm run openapi)
 apps/front/             application de l'artisan (React, Vite), d'après la maquette « Devis Vocal » (claude.ai/design)
-  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), mon entreprise, connexion ; fiches (client, nouvelle ligne)
+  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), clients et fiche client, mon entreprise, connexion ; fiches (client, nouvelle ligne)
   src/components/       cadre (barre latérale sur ordinateur, bandeau hors connexion), badges, bouton talkie-walkie, ligne de devis, totaux
   src/quotes/           useQuote (chargement, modifications, dictées, rafraîchissement, cache hors connexion), statuts, unités
   src/offline/          file des dictées hors connexion (IndexedDB), envoi au retour du réseau
@@ -71,7 +71,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, e-mail ou lien seul), suivi (ouverture, réponse du client, lien, renvoi de l'e-mail, relance, accepté / refusé). Mobile et ordinateur.
 - [x] Front : page client (E6) au style de la maquette et aperçu du document, ajout et modification complète des lignes, fiche client modifiable, suivi et accueil rafraîchis tout seuls, profil entreprise (« Mon entreprise »). Les liens des devis et le tunnel mènent à `apps/front` (5174).
-- [x] Front : thème sombre (suit le téléphone, ou forcé dans « Mon entreprise » ; la page client reste en clair)
+- [x] Front : page « Clients » (recherche, fiche avec ses devis et chiffres, nouveau devis sans ressaisie), clients existants proposés dans « Nouvelle visite », tri des devis (montant TTC, dernière activité), notes de chantier et dictées consultables sur un devis envoyé
+- [x] Front : thème sombre (suit le téléphone, ou forcé dans « Mon entreprise », page client comprise ; impression toujours en clair)
 - [ ] Bonus : PDF conforme, photos, relances automatiques
 
 Tenir cette liste à jour quand une étape est terminée.
@@ -129,18 +130,22 @@ cd apps/server; npm run tunnel          # fermeture : npm run tunnel -- stop
 | Commande | Où | Rôle |
 |---|---|---|
 | `npm run check` | apps/server | tout : formatage, analyse du code, types, tests, doc OpenAPI à jour (= hook) |
-| `npm run check` | apps/web, apps/front | tout : formatage, analyse du code, types et build (= hook) |
+| `npm run check` | apps/web | tout : formatage, analyse du code, types et build (= hook) |
+| `npm run check` | apps/front | tout : formatage, analyse du code, tests, types et build (= hook) |
 | `npm run format` | les deux | reformate automatiquement le code (Prettier) |
 | `npm run lint` | les deux | analyse du code (oxlint) |
 | `npm run typecheck` | apps/server | types du serveur et des scripts |
 | `npm test` | apps/server | tests unitaires (domaine) et d'intégration (API sur SQLite en mémoire) |
+| `npm test` | apps/front | tests unitaires (Vitest) : tris, recherche de clients, formats, statuts, file hors connexion (IndexedDB simulée) |
 | `npm run openapi` | apps/server | après un changement d'API : met à jour `openapi.json` et régénère les types du front |
 | `npm run test:ws -- samples/chantier-fr.wav` | apps/server | streame le WAV au serveur lancé, affiche les transcriptions |
+| `npm run e2e:front` | apps/server | Chrome headless sur `apps/front` (serveur et front lancés) : ajout et modification de ligne, dictée hors connexion puis envoi au retour du réseau, aperçu sans « consulté », « consulté » sans recharger, client existant sans doublon. Crée des devis « E2E … » sur le compte de démo ; code de sortie 1 en cas d'échec (`SCREENSHOTS=dossier` pour les captures) |
 | `npm run e2e:dictation` | apps/server | Chrome headless, micro simulé par le WAV : crée un devis sur le compte de démo, maintient le bouton talkie-walkie, affiche transcription et lignes (`SCREENSHOT=x.png` pour une capture) |
 | `npm run e2e -- http://localhost:5173 samples/chantier-fr.wav 20000` | apps/server | idem pour la page « Transcription live » |
 
 - La **logique pure** (calculs de devis, TVA, transitions de statut) doit avoir des tests unitaires (`*.test.ts` à côté du fichier, avec `node:test`).
 - Toute nouvelle route doit être couverte dans `src/app.test.ts` (via `app.inject`, sans serveur réel).
+- **Front** : la logique sort des composants dans des modules purs (`src/quotes/sort.ts`, `src/clients/clients.ts`…), testés avec Vitest (`*.test.ts` à côté du fichier, données de test dans `src/test/fixtures.ts`). Un nouveau parcours visible se vérifie aussi dans `scripts/e2e-front.mjs`.
 - Pour un changement visible à l'écran, le vérifier dans le navigateur (ou avec le script e2e), pas seulement au typecheck.
 
 ## Travailler à plusieurs

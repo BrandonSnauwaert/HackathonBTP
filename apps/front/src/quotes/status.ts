@@ -64,6 +64,10 @@ export const clipWarnings = (quote: QuoteDetail) => [...new Set(quote.clips.flat
 export const quoteName = (q: { title: string; client: { name: string } }) =>
   q.title ? `${q.title} — ${q.client.name}` : q.client.name;
 
+/** Date affichée dans « Dernière activité » (et utilisée pour les tris). */
+export const activityDate = (q: { status: QuoteStatus; sentAt: string | null; updatedAt: string }) =>
+  q.status === "sent" && q.sentAt ? q.sentAt : q.updatedAt;
+
 /** Un brouillon s'ouvre sur l'édition, un devis envoyé sur son suivi. */
 export const openQuote = (q: { id: string; status: QuoteStatus }) =>
   navigate({ name: isEditable(q.status) ? "quote" : "tracking", id: q.id });

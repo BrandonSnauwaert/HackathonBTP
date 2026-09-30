@@ -2,19 +2,37 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { QuoteSummary } from "../api/types";
 import { Logo, type Session } from "../components/AppShell";
-import { StatusBadge } from "../components/Badge";
-import { formatCents, formatRelative, formatToday, initials } from "../format";
+import { formatCents, formatToday, initials } from "../format";
 import { FILTERS, isEditable, openQuote, quoteName, type FilterId } from "../quotes/status";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { NewVisitSheet } from "./NewVisitSheet";
+import { QuoteRow } from "../components/QuoteRow";
+import { SORTS, compare, nextSort, type SortId } from "../quotes/sort";
 
 const WAITING = new Set(["sent", "viewed", "follow_up"]);
 const HOME_POLL_MS = 5000;
 
-function activity(q: QuoteSummary): string {
-  if (q.status === "sent" && q.sentAt) return `Envoyé ${formatRelative(q.sentAt)}`;
-  return `Mis à jour ${formatRelative(q.updatedAt)}`;
+function SortHeader(props: {
+  label: string;
+  column: "amount" | "activity";
+  sort: SortId;
+  onSort: (s: SortId) => void;
+  className?: string;
+}) {
+  const { label, column, sort, onSort } = props;
+  const direction = sort === `${column}-desc` ? "descending" : sort === `${column}-asc` ? "ascending" : "none";
+  return (
+    <button
+      type="button"
+      className={`th-sort ${direction !== "none" ? "on" : ""} ${props.className ?? ""}`}
+      aria-label={`Trier par ${label.toLowerCase()}`}
+      onClick={() => onSort(nextSort(sort, column))}
+    >
+      {label}
+      <span aria-hidden="true">{direction === "descending" ? " ↓" : direction === "ascending" ? " ↑" : " ↕"}</span>
+    </button>
+  );
 }
 
 /** E1 — Accueil : ce qui demande une action, quelques chiffres, la liste des devis. */
@@ -23,6 +41,7 @@ export function HomeScreen({ session }: { session: Session }) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterId>("all");
   const [creating, setCreating] = useState(false);
+  const [sort, setSort] = useState<SortId>("priority");
 
   // Rafraîchie régulièrement : les statuts changent quand le client ouvre ou accepte un devis.
   useEffect(() => {
@@ -39,7 +58,7 @@ export function HomeScreen({ session }: { session: Session }) {
     return () => clearInterval(timer);
   }, []);
 
-  const all = quotes ?? [];
+  const all = [...(quotes ?? [])].sort(compare(sort));
   const statuses = FILTERS.find((f) => f.id === filter)?.statuses ?? null;
   const shown = statuses ? all.filter((q) => (statuses as readonly string[]).includes(q.status)) : all;
   const toFollowUp = all.filter((q) => q.status === "follow_up");
@@ -57,9 +76,14 @@ export function HomeScreen({ session }: { session: Session }) {
             <Logo />
             <span className="b">Devis Vocal</span>
           </div>
-          <button className="ic avatar" onClick={() => navigate({ name: "profile" })} title="Mon entreprise">
-            {initials(companyName)}
-          </button>
+          <div className="row start">
+            <button className="btn ghost" onClick={() => navigate({ name: "clients" })}>
+              Clients
+            </button>
+            <button className="ic avatar" onClick={() => navigate({ name: "profile" })} title="Mon entreprise">
+              {initials(companyName)}
+            </button>
+          </div>
         </div>
         <div className="row">
           <div>
@@ -132,26 +156,30 @@ export function HomeScreen({ session }: { session: Session }) {
               </button>
             ))}
           </div>
+          {/* Sur téléphone, pas d'en-têtes de colonnes : le tri passe par une liste. */}
+          <label className="sort-select only-mobile">
+            <span className="mut small">Trier</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortId)}>
+              {SORTS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="qlist">
-          <div className="qrow th only-desktop" aria-hidden="true">
+          <div className="qrow th only-desktop">
             <span>Devis</span>
-            <span className="r">Montant TTC</span>
+            <SortHeader label="Montant TTC" column="amount" sort={sort} onSort={setSort} className="r" />
             <span>Statut</span>
-            <span>Dernière activité</span>
+            <SortHeader label="Dernière activité" column="activity" sort={sort} onSort={setSort} />
           </div>
           {quotes === null && !error && <p className="mut">Chargement…</p>}
           {quotes !== null && shown.length === 0 && <p className="mut empty">Aucun devis ici.</p>}
           {shown.map((q) => (
-            <button key={q.id} className="qrow card" onClick={() => openQuote(q)}>
-              <span className="q-name b">{quoteName(q)}</span>
-              <span className="q-amount b r">{formatCents(q.totalTtcCents)}</span>
-              <span className="q-status">
-                <StatusBadge status={q.status} label={q.statusLabel} />
-              </span>
-              <span className="q-activity mut small">{activity(q)}</span>
-            </button>
+            <QuoteRow key={q.id} quote={q} name={quoteName(q)} />
           ))}
         </div>
       </div>

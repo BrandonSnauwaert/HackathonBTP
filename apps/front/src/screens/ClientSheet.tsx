@@ -1,24 +1,28 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/client";
-import type { QuoteDetail } from "../api/types";
+import type { Client, QuoteDetail } from "../api/types";
 import { isEditable } from "../quotes/status";
 import { errorMessage } from "../quotes/useQuote";
 
 /**
- * Fiche du client et infos du chantier. Le client se modifie à tout moment
- * (une adresse e-mail erronée se corrige, puis on renvoie l'e-mail) ;
+ * Fiche du client, et infos du chantier quand elle est ouverte depuis un devis. Le client se modifie
+ * à tout moment (une adresse e-mail erronée se corrige, puis on renvoie l'e-mail) ;
  * le chantier et l'objet seulement tant que le devis n'est pas envoyé.
  */
-export function ClientSheet(props: { quote: QuoteDetail; onClose: () => void; onSaved: () => Promise<void> }) {
-  const { quote, onClose, onSaved } = props;
-  const { client } = quote;
-  const quoteEditable = isEditable(quote.status);
+export function ClientSheet(props: {
+  client: Client;
+  quote?: QuoteDetail;
+  onClose: () => void;
+  onSaved: () => Promise<void> | void;
+}) {
+  const { client, quote, onClose, onSaved } = props;
+  const quoteEditable = quote !== undefined && isEditable(quote.status);
   const [name, setName] = useState(client.name);
   const [email, setEmail] = useState(client.email);
   const [phone, setPhone] = useState(client.phone);
   const [address, setAddress] = useState(client.address);
-  const [siteAddress, setSiteAddress] = useState(quote.siteAddress);
-  const [title, setTitle] = useState(quote.title);
+  const [siteAddress, setSiteAddress] = useState(quote?.siteAddress ?? "");
+  const [title, setTitle] = useState(quote?.title ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -32,7 +36,7 @@ export function ClientSheet(props: { quote: QuoteDetail; onClose: () => void; on
         (key) => clientUpdate[key] !== client[key],
       );
       if (clientChanged) await api.updateClient(client.id, clientUpdate);
-      if (quoteEditable && (siteAddress.trim() !== quote.siteAddress || title.trim() !== quote.title)) {
+      if (quote && quoteEditable && (siteAddress.trim() !== quote.siteAddress || title.trim() !== quote.title)) {
         await api.updateQuote(quote.id, { siteAddress: siteAddress.trim(), title: title.trim() });
       }
       await onSaved();
@@ -47,7 +51,7 @@ export function ClientSheet(props: { quote: QuoteDetail; onClose: () => void; on
     <div className="sheet-backdrop" onClick={onClose}>
       <form className="sheet" onClick={(e) => e.stopPropagation()} onSubmit={(e) => void submit(e)}>
         <div className="row">
-          <h2 className="h2">Client et chantier</h2>
+          <h2 className="h2">{quote ? "Client et chantier" : "Client"}</h2>
           <button type="button" className="btn ghost" onClick={onClose}>
             Annuler
           </button>

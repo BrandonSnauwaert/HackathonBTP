@@ -5,6 +5,7 @@ import { StatusBadge } from "../components/Badge";
 import { ClipCards } from "../components/ClipCards";
 import { LineItem } from "../components/LineItem";
 import { PhotoButton } from "../components/PhotoButton";
+import { SiteNotes } from "../components/SiteNotes";
 import { TalkButton } from "../components/TalkButton";
 import { Totals } from "../components/Totals";
 import { formatCents } from "../format";
@@ -70,7 +71,7 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
           <ClientCard quote={quote} onEdit={() => setSheet("client")} />
           {!editable && (
             <button className="card flat action" onClick={() => navigate({ name: "tracking", id: quote.id })}>
-              <span className="grow">Ce devis a été envoyé : il n'est plus modifiable.</span>
+              <span className="grow">Ce devis a été envoyé : consultation seule, il n'est plus modifiable.</span>
               <span className="b blue-text">Suivi ›</span>
             </button>
           )}
@@ -135,23 +136,33 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
             </a>
           </div>
 
-          <section className="photos-block">
-            <div className="row">
-              <h2 className="b">
-                Photos {quote.photos.length > 0 && <span className="mut">({quote.photos.length})</span>}
-              </h2>
-              {editable && <PhotoButton quoteId={quote.id} onAdded={() => void load()} className="ghost" />}
-            </div>
-            {quote.photos.length > 0 && (
-              <div className="thumbs">
-                {quote.photos.map((photo) => (
-                  <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer">
-                    <img className="thumb" src={photo.url} alt={photo.caption || "Photo de chantier"} />
-                  </a>
-                ))}
+          <SiteNotes
+            // Remonté quand la note change côté serveur : le champ reprend la valeur enregistrée.
+            key={quote.notes}
+            quote={quote}
+            editable={editable}
+            onSave={(notes) => void run(() => api.updateQuote(quote.id, { notes }))}
+          />
+
+          {(editable || quote.photos.length > 0) && (
+            <section className="photos-block">
+              <div className="row">
+                <h2 className="b">
+                  Photos {quote.photos.length > 0 && <span className="mut">({quote.photos.length})</span>}
+                </h2>
+                {editable && <PhotoButton quoteId={quote.id} onAdded={() => void load()} className="ghost" />}
               </div>
-            )}
-          </section>
+              {quote.photos.length > 0 && (
+                <div className="thumbs">
+                  {quote.photos.map((photo) => (
+                    <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer">
+                      <img className="thumb" src={photo.url} alt={photo.caption || "Photo de chantier"} />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           <div className="card only-mobile">
             <Totals quote={quote} big={false} />
@@ -186,7 +197,9 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
           run={run}
         />
       )}
-      {sheet === "client" && <ClientSheet quote={quote} onClose={() => setSheet(null)} onSaved={load} />}
+      {sheet === "client" && (
+        <ClientSheet client={quote.client} quote={quote} onClose={() => setSheet(null)} onSaved={load} />
+      )}
     </div>
   );
 }

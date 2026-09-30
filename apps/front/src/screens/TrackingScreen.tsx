@@ -1,11 +1,12 @@
 import { api } from "../api/client";
-import type { QuoteEvent, QuoteStatus } from "../api/types";
+import type { QuoteDetail, QuoteEvent, QuoteStatus } from "../api/types";
 import { StatusBadge } from "../components/Badge";
+import { Totals } from "../components/Totals";
 import { useState } from "react";
-import { formatCents, formatDayTime, formatShortDate } from "../format";
+import { formatCents, formatDayTime, formatQuantity, formatShortDate } from "../format";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
-import { quoteName } from "../quotes/status";
+import { groupByRoom, quoteName } from "../quotes/status";
 import { ClientCard, ClientSheet } from "./ClientSheet";
 
 const STATUS_EVENTS: Record<QuoteStatus, string> = {
@@ -42,11 +43,53 @@ function eventLabel(event: QuoteEvent): string {
 
 const RESENDABLE: readonly QuoteStatus[] = ["sent", "viewed", "follow_up"];
 
-const ACTIONS: Partial<Record<QuoteStatus, string>> = {
-  accepted: "Marquer accepté",
-  declined: "Marquer refusé",
-  draft: "Modifier",
+/** Réponse orale du client, notée par l'artisan ; ou retour en brouillon (lien seul, pas encore ouvert). */
+const ACTIONS: Partial<Record<QuoteStatus, { label: string; className: string }>> = {
+  draft: { label: "Modifier", className: "btn ghost" },
+  declined: { label: "✕ Marquer refusé", className: "btn" },
+  accepted: { label: "✓ Marquer accepté", className: "btn ok" },
 };
+const ACTION_ORDER: QuoteStatus[] = ["draft", "declined", "accepted"];
+
+/** Le devis tel qu'envoyé : lignes par pièce et totaux ; notes, dictées et photos dans le détail complet. */
+function QuoteContent({ quote }: { quote: QuoteDetail }) {
+  const extras = [
+    quote.clips.length > 0 && `${quote.clips.length} dictée${quote.clips.length > 1 ? "s" : ""}`,
+    quote.photos.length > 0 && `${quote.photos.length} photo${quote.photos.length > 1 ? "s" : ""}`,
+    quote.notes && "notes",
+  ].filter(Boolean);
+  return (
+    <section className="card pad quote-content">
+      <div className="row">
+        <h2 className="h2">Détail du devis</h2>
+        <button className="link" onClick={() => navigate({ name: "quote", id: quote.id })}>
+          Tout voir ›
+        </button>
+      </div>
+      {groupByRoom(quote.lines).map((group) => (
+        <div key={group.room} className="qc-group">
+          <div className="qc-room">{group.room}</div>
+          {group.lines.map((line) => (
+            <div key={line.id} className="qc-line">
+              <span className="grow">{line.description}</span>
+              <span className="mut nowrap">
+                {formatQuantity(line.quantity)} {line.unitLabel}
+              </span>
+              <span className="b nowrap r">{line.totalHtCents === null ? "—" : formatCents(line.totalHtCents)}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+      <Totals quote={quote} big={false} />
+      {extras.length > 0 && (
+        <button className="card flat action small" onClick={() => navigate({ name: "quote", id: quote.id })}>
+          <span className="grow">Notes de chantier : {extras.join(" · ")}</span>
+          <span className="b blue-text">›</span>
+        </button>
+      )}
+    </section>
+  );
+}
 
 /** E5 — Suivi d'un devis : état, relance à faire, chronologie, réponse orale du client. */
 export function TrackingScreen({ quoteId }: { quoteId: string }) {
@@ -72,6 +115,7 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
     setResent(await run(() => api.resendEmail(quote.id)));
   };
   const events = [...quote.events].reverse();
+  const actions = ACTION_ORDER.filter((status) => quote.allowedTransitions.includes(status));
 
   const act = async (status: QuoteStatus) => {
     const ok = await run(() => api.changeStatus(quote.id, status));
@@ -97,105 +141,113 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
       </header>
 
       <div className="bd tracking-grid">
-        {error && <p className="error-text">{error}</p>}
-        {quote.status === "follow_up" && (
-          <div className="card w pad">
-            <div className="row start">
-              <div className="ic yellow">↻</div>
-              <span className="b">Relance conseillée</span>
-            </div>
-            <div className="h2">{client.name} n'a pas encore répondu.</div>
-            <div className="btns">
-              {client.phone && (
-                <a className="btn pri" href={`tel:${client.phone.replace(/\s/g, "")}`}>
-                  Appeler
-                </a>
-              )}
-              {client.email && (
-                <a
-                  className="btn"
-                  href={`mailto:${client.email}?subject=${encodeURIComponent(`Devis ${quote.number}`)}`}
-                >
-                  Écrire
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-        {response && (
-          <div className={`card pad ${response.decision === "accepted" ? "ok" : ""}`}>
-            <div className="row start">
-              <div className={`ic ${response.decision === "accepted" ? "green" : "grey"}`}>
-                {response.decision === "accepted" ? "✓" : "✕"}
+        <div className="tracking-col">
+          {error && <p className="error-text">{error}</p>}
+          {quote.status === "follow_up" && (
+            <div className="card w pad">
+              <div className="row start">
+                <div className="ic yellow">↻</div>
+                <span className="b">Relance conseillée</span>
               </div>
-              <span className="b">
-                {response.decision === "accepted" ? "Bon pour accord" : "Devis refusé"} · {formatDayTime(response.at)}
-              </span>
-            </div>
-            {response.name && (
-              <div>
-                {response.decision === "accepted" ? "Signé par " : "Par "}
-                <span className="b">{response.name}</span>
+              <div className="h2">{client.name} n'a pas encore répondu.</div>
+              <div className="btns">
+                {client.phone && (
+                  <a className="btn pri" href={`tel:${client.phone.replace(/\s/g, "")}`}>
+                    Appeler
+                  </a>
+                )}
+                {client.email && (
+                  <a
+                    className="btn"
+                    href={`mailto:${client.email}?subject=${encodeURIComponent(`Devis ${quote.number}`)}`}
+                  >
+                    Écrire
+                  </a>
+                )}
               </div>
-            )}
-            {response.message && <div className="card flat small">« {response.message} »</div>}
-          </div>
-        )}
-        {!response && quote.viewedAt && (
-          <div className="card pad">
-            <div className="row start">
-              <div className="ic blue">◉</div>
-              <span className="b">
-                {client.name} a ouvert le devis · {formatDayTime(quote.viewedAt)}
-              </span>
             </div>
-          </div>
-        )}
-        <ClientCard quote={quote} onEdit={() => setEditingClient(true)} />
-        {quote.publicUrl && (
-          <div className="card pad">
-            <div className="row">
-              <span className="b">Page du devis</span>
-              <a className="link" href={quote.publicUrl} target="_blank" rel="noreferrer">
-                Ouvrir ↗
-              </a>
-            </div>
-            <div className="mut small url-text">{quote.publicUrl}</div>
-            <div className="btns">
-              <button className="btn" onClick={() => void copyLink(quote.publicUrl ?? "")}>
-                {copied ? "Lien copié ✓" : "Copier le lien"}
-              </button>
-              {RESENDABLE.includes(quote.status) && client.email && (
-                <button className="btn" onClick={() => void resend()}>
-                  {resent ? "E-mail renvoyé ✓" : "Renvoyer l'e-mail"}
-                </button>
+          )}
+          {response && (
+            <div className={`card pad ${response.decision === "accepted" ? "ok" : ""}`}>
+              <div className="row start">
+                <div className={`ic ${response.decision === "accepted" ? "green" : "grey"}`}>
+                  {response.decision === "accepted" ? "✓" : "✕"}
+                </div>
+                <span className="b">
+                  {response.decision === "accepted" ? "Bon pour accord" : "Devis refusé"} · {formatDayTime(response.at)}
+                </span>
+              </div>
+              {response.name && (
+                <div>
+                  {response.decision === "accepted" ? "Signé par " : "Par "}
+                  <span className="b">{response.name}</span>
+                </div>
               )}
+              {response.message && <div className="card flat small">« {response.message} »</div>}
             </div>
-          </div>
-        )}
+          )}
+          {!response && quote.viewedAt && (
+            <div className="card pad">
+              <div className="row start">
+                <div className="ic blue">◉</div>
+                <span className="b">
+                  {client.name} a ouvert le devis · {formatDayTime(quote.viewedAt)}
+                </span>
+              </div>
+            </div>
+          )}
+          <QuoteContent quote={quote} />
+          <ClientCard quote={quote} onEdit={() => setEditingClient(true)} />
+        </div>
 
-        <div className="card pad">
-          <h2 className="h2">Chronologie</h2>
-          <div className="tl">
-            {events.map((event) => (
-              <div key={event.id}>
-                <span className="b">{formatDayTime(event.createdAt)}</span> · {eventLabel(event)}
+        <div className="tracking-col">
+          {quote.publicUrl && (
+            <div className="card pad">
+              <div className="row">
+                <span className="b">Page du devis</span>
+                {/* L'aperçu, pas le lien du client : l'ouvrir soi-même ferait passer le devis en « consulté ». */}
+                <a className="link" href={`/apercu/${quote.id}`}>
+                  Voir le devis
+                </a>
               </div>
-            ))}
+              <div className="mut small">Lien du client (l'ouvrir vous-même le marquerait « consulté ») :</div>
+              <div className="mut small url-text">{quote.publicUrl}</div>
+              <div className="btns">
+                <button className="btn" onClick={() => void copyLink(quote.publicUrl ?? "")}>
+                  {copied ? "Lien copié ✓" : "Copier le lien"}
+                </button>
+                {RESENDABLE.includes(quote.status) && client.email && (
+                  <button className="btn" onClick={() => void resend()}>
+                    {resent ? "E-mail renvoyé ✓" : "Renvoyer l'e-mail"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="card pad">
+            <h2 className="h2">Chronologie</h2>
+            <div className="tl">
+              {events.map((event) => (
+                <div key={event.id}>
+                  <span className="b">{formatDayTime(event.createdAt)}</span> · {eventLabel(event)}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {editingClient && <ClientSheet quote={quote} onClose={() => setEditingClient(false)} onSaved={load} />}
-      {quote.allowedTransitions.some((s) => ACTIONS[s]) && (
+      {editingClient && (
+        <ClientSheet client={quote.client} quote={quote} onClose={() => setEditingClient(false)} onSaved={load} />
+      )}
+      {actions.length > 0 && (
         <footer className="ft actions">
-          {quote.allowedTransitions
-            .filter((status) => ACTIONS[status])
-            .map((status) => (
-              <button key={status} className="btn ghost" onClick={() => void act(status)}>
-                {ACTIONS[status]}
-              </button>
-            ))}
+          {actions.map((status) => (
+            <button key={status} className={ACTIONS[status]?.className} onClick={() => void act(status)}>
+              {ACTIONS[status]?.label}
+            </button>
+          ))}
         </footer>
       )}
     </div>
