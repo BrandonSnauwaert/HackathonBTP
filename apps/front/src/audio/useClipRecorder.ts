@@ -57,7 +57,8 @@ export function useClipRecorder() {
     return recorderRef.current;
   }, [onChunk]);
 
-  const start = useCallback(async () => {
+  /** Démarre l'enregistrement ; false si le micro est inaccessible ou si le bouton a déjà été relâché. */
+  const start = useCallback(async (): Promise<boolean> => {
     setError(null);
     wanted.current = true;
     try {
@@ -65,17 +66,18 @@ export function useClipRecorder() {
     } catch (err) {
       setState("error");
       setError(err instanceof Error ? err.message : "Micro inaccessible");
-      return;
+      return false;
     }
     if (!wanted.current) {
       setState("ready");
-      return;
+      return false;
     }
     chunks.current = [...preroll.current];
     preroll.current = [];
     startedAt.current = new Date();
     capturing.current = true;
     setState("recording");
+    return true;
   }, [ensureMicrophone]);
 
   /** Termine l'enregistrement ; null si trop court ou si le micro n'a pas démarré. */
@@ -94,6 +96,21 @@ export function useClipRecorder() {
     return { wav: encodeWav(recorded, SAMPLE_RATE), durationMs, recordedAt: startedAt.current ?? new Date() };
   }, []);
 
+  /**
+   * Écoute passive : rend l'audio enregistré depuis le dernier découpage et continue d'enregistrer,
+   * sans trou entre deux segments. null si rien (ou trop peu) n'a été enregistré.
+   */
+  const split = useCallback((): RecordedClip | null => {
+    if (!capturing.current) return null;
+    const recorded = chunks.current;
+    const recordedAt = startedAt.current ?? new Date();
+    chunks.current = [];
+    startedAt.current = new Date();
+    const durationMs = recorded.length * CHUNK_MS;
+    if (durationMs < MIN_DURATION_MS) return null;
+    return { wav: encodeWav(recorded, SAMPLE_RATE), durationMs, recordedAt };
+  }, []);
+
   useEffect(
     () => () => {
       void recorderRef.current?.then((recorder) => recorder.stop()).catch(() => undefined);
@@ -102,5 +119,5 @@ export function useClipRecorder() {
     [],
   );
 
-  return { state, level, error, start, stop };
+  return { state, level, error, start, stop, split };
 }

@@ -17,12 +17,14 @@ import {
   toClipView,
   updateClip,
   type Clip,
+  type ClipKind,
   type ClipView,
 } from "../repositories/clips.js";
 import { getQuote, listLines } from "../repositories/quotes.js";
 import type { Logger } from "../transcription/kyutai-transcriber.js";
 import { transcribeAudio } from "../transcription/transcribe-audio.js";
 import type { Transcriber } from "../transcription/transcriber.js";
+import type { ClipEstimator } from "./clip-estimates.js";
 import type { QuoteService } from "./quote-service.js";
 
 export interface ClipServiceDeps {
@@ -33,6 +35,7 @@ export interface ClipServiceDeps {
   createTranscriber: () => Transcriber;
   extractor: LineExtractor;
   logger: Logger;
+  estimateClips: ClipEstimator;
 }
 
 export interface UploadMeta {
@@ -40,6 +43,8 @@ export interface UploadMeta {
   clientClipId?: string | undefined;
   /** Moment de l'enregistrement (la dictée a pu être faite hors connexion bien avant l'envoi). */
   recordedAt?: string | undefined;
+  /** Dictée talkie-walkie (par défaut) ou segment d'écoute passive. */
+  kind?: ClipKind | undefined;
 }
 
 const MIN_CLIP_MS = 300;
@@ -59,7 +64,8 @@ export function createClipService(deps: ClipServiceDeps) {
   const listeners = new Map<string, Set<() => void>>();
 
   function view(clip: Clip): ClipView {
-    return toClipView(clip, countLinesByClip(db, clip.quoteId).get(clip.id) ?? 0);
+    const estimate = isFinished(clip) ? undefined : deps.estimateClips().get(clip.id);
+    return toClipView(clip, countLinesByClip(db, clip.quoteId).get(clip.id) ?? 0, estimate);
   }
 
   function notify(clipId: string): void {
@@ -116,6 +122,7 @@ export function createClipService(deps: ClipServiceDeps) {
       }
       const result = await deps.extractor.extract({
         transcript,
+        kind: clip.kind,
         existingLines: listLines(db, clip.quoteId).map((l) => ({
           description: l.description,
           room: l.room,
@@ -197,6 +204,7 @@ export function createClipService(deps: ClipServiceDeps) {
           id,
           quoteId,
           clientClipId: meta.clientClipId ?? null,
+          kind: meta.kind ?? "dictation",
           audioFile,
           durationMs,
           recordedAt: meta.recordedAt ?? new Date().toISOString(),

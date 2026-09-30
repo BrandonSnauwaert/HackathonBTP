@@ -25,6 +25,7 @@ import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
 import type { ExtractedLine } from "../llm/line-extractor.js";
 import type { PatchOf } from "../types.js";
+import type { ClipEstimator } from "./clip-estimates.js";
 
 export interface QuoteServiceOptions {
   /** Délai sans réponse après l'envoi avant de passer « à relancer ». */
@@ -37,6 +38,8 @@ export interface QuoteServiceOptions {
   publicBaseUrl: () => string;
   /** Envoi des e-mails (SMTP, ou simple log). */
   mailer: Mailer;
+  /** Fin estimée des dictées en cours (absent : pas d'estimation). */
+  estimateClips?: ClipEstimator;
 }
 
 export type QuoteLineView = QuoteLine & { unitLabel: string; totalHtCents: number | null };
@@ -162,7 +165,11 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
 
   function listClipViews(quoteId: string): ClipView[] {
     const lineCounts = countLinesByClip(db, quoteId);
-    return listClips(db, quoteId).map((clip) => toClipView(clip, lineCounts.get(clip.id) ?? 0));
+    const clips = listClips(db, quoteId);
+    const estimates = clips.some((c) => c.status !== "done" && c.status !== "failed")
+      ? (options.estimateClips?.() ?? new Map<string, Date>())
+      : new Map<string, Date>();
+    return clips.map((clip) => toClipView(clip, lineCounts.get(clip.id) ?? 0, estimates.get(clip.id)));
   }
 
   function publicUrl(quote: Quote): string {

@@ -25,4 +25,5 @@ export type Photo = Schemas["Photo"];
 export type QuoteEvent = Schemas["QuoteEvent"];
 export type QuoteResponse = Schemas["QuoteResponse"];
 export type ClipStatus = Clip["status"];
+export type ClipKind = Clip["kind"];
 export type ApiErrorBody = Schemas["Error"];

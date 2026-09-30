@@ -1587,10 +1587,12 @@ export interface paths {
         };
         put?: never;
         /**
-         * Envoyer une dictée audio (talkie-walkie)
+         * Envoyer une dictée audio (talkie-walkie) ou un segment d'écoute passive
          * @description Corps : le fichier **WAV** brut (PCM 16 bits ou flottant 32 bits, toute fréquence), avec `Content-Type: audio/wav`. La dictée est transcrite puis analysée en tâche de fond : les lignes extraites s'ajoutent au devis. Suivre l'avancement via `GET /api/quotes/{id}` (champ `clips`) ou passer `wait=true` pour attendre le résultat.
          *
          *     Hors connexion : générer un `clientClipId` (UUID) sur le téléphone. Un renvoi du même clip renvoie le clip existant (200) au lieu d'en créer un second.
+         *
+         *     Écoute passive : la visite est enregistrée en continu et envoyée par segments (`kind=passive`, `MAX_CLIP_SECONDS` chacun au plus). Le LLM sait alors qu'il lit une conversation. `estimatedReadyAt` donne la fin de traitement estimée.
          */
         post: {
             parameters: {
@@ -1599,6 +1601,8 @@ export interface paths {
                     clientClipId?: string;
                     /** @description Date de l'enregistrement (ISO 8601) */
                     recordedAt?: string;
+                    /** @description dictation (défaut) ou passive (segment d'écoute passive) */
+                    kind?: "dictation" | "passive";
                     /** @description true = attendre la fin du traitement (2 min max) */
                     wait?: "true" | "false";
                 };
@@ -2732,6 +2736,11 @@ export interface components {
             /** @description Identifiant généré par le téléphone */
             clientClipId: string | null;
             /**
+             * @description dictation = talkie-walkie, passive = segment d'une écoute passive
+             * @enum {string}
+             */
+            kind: "dictation" | "passive";
+            /**
              * @description pending → transcribing → transcribed → extracting → done, ou failed
              * @enum {string}
              */
@@ -2746,6 +2755,8 @@ export interface components {
             error: string | null;
             /** @description Nombre de lignes ajoutées au devis par cette dictée */
             lineCount: number;
+            /** @description Fin de traitement estimée (file de transcription puis analyse) ; null une fois terminé */
+            estimatedReadyAt: string | null;
             /** @description Date ISO 8601 */
             recordedAt: string;
             /** @description Date ISO 8601 */

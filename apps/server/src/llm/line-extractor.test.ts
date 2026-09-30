@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { LlmError, parseJsonResponse, type ChatMessage, type LlmClient } from "./llm-client.js";
-import { createLlmLineExtractor, mockLineExtractor, normalizeUnit, normalizeVatRate } from "./line-extractor.js";
+import {
+  buildUserPrompt,
+  createLlmLineExtractor,
+  mockLineExtractor,
+  normalizeUnit,
+  normalizeVatRate,
+} from "./line-extractor.js";
 import { createOpenAiCompatibleClient } from "./openai-client.js";
 
 /** Faux LLM qui renvoie les réponses prévues, dans l'ordre, et garde les messages reçus. */
@@ -138,5 +144,23 @@ describe("mockLineExtractor", () => {
       { room: "Cuisine", quantity: 12, unit: "m2" },
     );
     assert.equal(result.lines[1]?.room, "Salle de bain");
+  });
+});
+
+describe("buildUserPrompt", () => {
+  const existingLines = [{ description: "Pose d'une porte", room: "Cuisine", quantity: 1, unit: "u" as const }];
+
+  it("présente une dictée comme telle, avec les lignes déjà présentes", () => {
+    const prompt = buildUserPrompt({ transcript: "changer la porte", existingLines });
+    assert.match(prompt, /Transcription de la dictée/);
+    assert.match(prompt, /\[Cuisine\] Pose d'une porte \(1 u\)/);
+    assert.doesNotMatch(prompt, /conversation/);
+  });
+
+  it("prévient le LLM qu'une écoute passive est une conversation à trier", () => {
+    const prompt = buildUserPrompt({ transcript: "et là on pourrait…", existingLines: [], kind: "passive" });
+    assert.match(prompt, /conversation enregistrée pendant la visite/);
+    assert.match(prompt, /N'extrais que les travaux que l'artisan prévoit/);
+    assert.match(prompt, /et là on pourrait…/);
   });
 });

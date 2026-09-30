@@ -55,7 +55,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 
 - [x] Transcription en streaming de bout en bout : front → WebSocket → Kyutai (GPU local) → phrases définitives affichées
 - [x] Mock de transcription (`TRANSCRIBER=mock`) pour travailler sans GPU
-- [ ] Passage en **talkie-walkie** : clips audio au lieu du flux continu (le flux reste possible en aperçu quand le réseau est là)
+- [x] Passage en **talkie-walkie** : clips audio au lieu du flux continu (le flux reste possible en aperçu quand le réseau est là)
+- [x] **Écoute passive** (option de la visite) : accord du client obligatoire, segments de 4 min 30 envoyés au fil de l'eau (hors connexion compris), LLM prévenu qu'il lit une conversation, temps restant estimé affiché (`estimatedReadyAt`)
 - [x] File d'attente **hors connexion** (`apps/front`) : clips stockés dans IndexedDB, synchronisés au retour du réseau. Service worker, manifest PWA, session et dernier état des devis gardés sur le téléphone, écran maintenu allumé pendant la visite.
 - [x] SQLite : artisans, profil entreprise, clients, devis, lignes, historique
 - [x] Authentification (e-mail + mot de passe, session par cookie) et compte de démo pré-rempli (`npm run seed:demo`)
@@ -194,6 +195,8 @@ interface Transcriber {
 - Configuration : `LLM_PROVIDER` (`mock` = extraction par mots-clés sans LLM, `openai`), `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_TEMPERATURE`, `LLM_TIMEOUT_MS`, `LLM_JSON_MODE` (`json_object` par défaut ; `json_schema` si le serveur le gère ; `none` si le serveur refuse `response_format`).
 
 **Dictées** : `POST /api/quotes/:id/clips`, corps WAV brut (`Content-Type: audio/wav`), avec `clientClipId` (UUID généré par le téléphone, qui rend le renvoi sans risque) et `recordedAt`. Traitement en tâche de fond, en deux files : la **transcription** (GPU local) enchaîne les clips un par un sans attendre le LLM ; l'**analyse** (LLM distant) démarre dès qu'un texte est prêt, dans l'ordre des dictées pour un même devis, en parallèle entre devis. Statuts : `pending → transcribing → transcribed → extracting → done | failed`. Le front suit l'avancement via le champ `clips` de `GET /api/quotes/:id`. Une transcription réussie est conservée : une relance ne refait que l'appel au LLM.
+- `kind` : `dictation` (talkie-walkie, par défaut) ou `passive` (segment d'écoute passive, `?kind=passive` à l'envoi). Le prompt prévient alors le LLM qu'il lit une conversation artisan / client.
+- `estimatedReadyAt` : fin de traitement estimée de chaque dictée non terminée (null ensuite), calculée par `src/domain/clip-estimate.ts` à partir de la file de transcription (durée de l'audio × `STT_SPEED_FACTOR`, 1,15 avec Kyutai) et de l'analyse (`LLM_ESTIMATE_BASE_SECONDS` + `LLM_ESTIMATE_SECONDS_PER_AUDIO_MINUTE` × minutes d'audio). À réajuster si le GPU ou le LLM change.
 
 **Format audio** du client vers le serveur : PCM **s16le, mono, 24 kHz**, envoyé en messages binaires. Le rééchantillonnage se fait dans l'AudioWorklet du front.
 

@@ -782,6 +782,69 @@ a {
   height: 40px;
 }
 
+/* --- Écoute passive (E2) */
+
+.passive-banner {
+  box-shadow: 0 0 0 2px var(--green-live);
+}
+
+.passive-banner .b {
+  color: var(--green-dark);
+}
+
+.btn.passive-btn {
+  flex: none;
+  padding: 0 14px;
+  font-size: 16px;
+}
+
+/* Téléphone : Photo et Écoute en boutons compacts (icône sur libellé), le talkie-walkie garde la place. */
+@media (max-width: 1023px) {
+  .visit .ft .btns .photo-btn,
+  .visit .ft .btns .passive-btn {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 12px;
+    min-width: 70px;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .visit .ft .btns .btn.talk {
+    padding: 0 10px;
+    font-size: 16px;
+  }
+}
+
+/* Arrêt de l'écoute passive : la seule action attendue pendant l'écoute. */
+.btn.stop {
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: 0 0 0 4px rgba(63, 210, 75, 0.35);
+}
+
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 15px;
+}
+
+.consent input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--blue);
+}
+
+.eta {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
 /* --- Clients */
 
 .green-text {

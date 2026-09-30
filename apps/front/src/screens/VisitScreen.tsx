@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useClipRecorder } from "../audio/useClipRecorder";
+import { usePassiveListening } from "../audio/usePassiveListening";
 import { useWakeLock } from "../audio/useWakeLock";
 import { Badge } from "../components/Badge";
 import { ClipCards } from "../components/ClipCards";
@@ -7,9 +8,18 @@ import { LevelBars } from "../components/LevelBars";
 import { PhotoButton } from "../components/PhotoButton";
 import { TalkButton } from "../components/TalkButton";
 import { formatClock, formatQuantity, formatTime } from "../format";
+import { formatRemaining, lastReadyAt, pendingPassiveMinutes } from "../quotes/eta";
 import { clipWarnings, isEditable } from "../quotes/status";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
+import { PassiveSheet } from "./PassiveSheet";
+
+/** « 4 min 30 », « 5 min » */
+const formatSegment = (ms: number) => {
+  const seconds = Math.round(ms / 1000);
+  const rest = seconds % 60;
+  return `${Math.floor(seconds / 60)} min${rest ? ` ${String(rest).padStart(2, "0")}` : ""}`;
+};
 
 /** Durée de l'enregistrement en cours, rafraîchie chaque seconde. */
 function useRecordingClock(recording: boolean) {
@@ -27,14 +37,16 @@ function useRecordingClock(recording: boolean) {
 }
 
 /**
- * E2 — Visite : l'artisan dicte en talkie-walkie (maintenir, parler, relâcher),
- * les lignes comprises s'affichent au fil des dictées.
+ * E2 — Visite : l'artisan dicte en talkie-walkie (maintenir, parler, relâcher), ou lance une écoute
+ * passive de toute la visite ; les lignes comprises s'affichent au fil des dictées, avec le temps restant.
  */
 export function VisitScreen({ quoteId }: { quoteId: string }) {
   const { quote, error, uploads, online, processing, load, send, addClip, retryClip } = useQuote(quoteId);
   const recorder = useClipRecorder();
   const recording = recorder.state === "recording";
   const elapsed = useRecordingClock(recording);
+  const passive = usePassiveListening(recorder, (clip) => addClip(clip, "passive"));
+  const [passiveSheet, setPassiveSheet] = useState(false);
   // Pendant toute la visite : l'artisan pose souvent le téléphone entre deux dictées.
   useWakeLock(true);
 
@@ -46,8 +58,12 @@ export function VisitScreen({ quoteId }: { quoteId: string }) {
   const transcripts = quote.clips.filter((clip) => clip.transcript);
   const lastTranscript = transcripts.at(-1);
   const waiting = uploads.filter((u) => u.waiting).length;
+  const readyAt = lastReadyAt(quote.clips);
+  const passiveMinutes = pendingPassiveMinutes(quote.clips);
   const pillLabel = recording
-    ? "J'enregistre"
+    ? passive.listening
+      ? "J'écoute"
+      : "J'enregistre"
     : waiting > 0
       ? `${waiting} en attente`
       : processing || uploads.length > 0
@@ -86,9 +102,30 @@ export function VisitScreen({ quoteId }: { quoteId: string }) {
               {quote.lines.length} poste{quote.lines.length > 1 ? "s" : ""}
             </span>
           </div>
+          {passive.listening && (
+            <div className="card passive-banner" role="status">
+              <div className="row">
+                <span className="b">● Écoute en cours · {formatClock(passive.elapsedMs)}</span>
+                <span className="small mut">
+                  {passive.segments} segment{passive.segments > 1 ? "s" : ""} envoyé{passive.segments > 1 ? "s" : ""}
+                </span>
+              </div>
+              <span className="small mut">
+                Posez le téléphone et parlez normalement avec votre client. Un segment part toutes les{" "}
+                {formatSegment(passive.segmentMs)} : l'analyse commence sans attendre la fin de la visite.
+              </span>
+            </div>
+          )}
+          {readyAt && (
+            <p className="small eta" role="status">
+              Tout sera prêt dans <b>{formatRemaining(readyAt)}</b> (vers {formatTime(readyAt).slice(0, 5)})
+              {passiveMinutes > 0 &&
+                ` · ${passiveMinutes} min d'écoute passive à traiter : c'est plus long que des dictées`}
+            </p>
+          )}
           {error && <p className="error-text">{error}</p>}
           <div className="cards">
-            {quote.lines.length === 0 && quote.clips.length === 0 && uploads.length === 0 && (
+            {!passive.listening && quote.lines.length === 0 && quote.clips.length === 0 && uploads.length === 0 && (
               <div className="card dash">Maintenez le bouton et décrivez les travaux, pièce par pièce.</div>
             )}
             {quote.lines.map((line) => (
@@ -139,15 +176,40 @@ export function VisitScreen({ quoteId }: { quoteId: string }) {
       </div>
 
       <footer className="ft">
-        {recorder.error && <p className="error-text">{recorder.error}</p>}
+        {recorder.error && !passiveSheet && <p className="error-text">{recorder.error}</p>}
         <div className="btns">
           <PhotoButton quoteId={quote.id} onAdded={() => void load()} className="photo-btn" />
-          <TalkButton recorder={recorder} onClip={addClip} disabled={!editable} className="grow2" />
+          {passive.listening ? (
+            <button className="btn stop grow2" onClick={() => void passive.stop()}>
+              <span aria-hidden="true">■</span> Arrêter l'écoute · {formatClock(passive.elapsedMs)}
+            </button>
+          ) : (
+            <>
+              {editable && (
+                <button
+                  className="btn passive-btn"
+                  disabled={recording}
+                  onClick={() => setPassiveSheet(true)}
+                  title="Enregistrer toute la visite"
+                >
+                  <span aria-hidden="true">◎</span>
+                  <span>
+                    Écoute<span className="only-desktop"> passive</span>
+                  </span>
+                </button>
+              )}
+              <TalkButton recorder={recorder} onClip={addClip} disabled={!editable} className="grow2" />
+            </>
+          )}
         </div>
         <button className="btn pri" onClick={() => navigate({ name: "quote", id: quote.id })}>
           Terminer la visite
         </button>
       </footer>
+
+      {passiveSheet && (
+        <PassiveSheet onStart={passive.start} onClose={() => setPassiveSheet(false)} error={recorder.error} />
+      )}
     </div>
   );
 }

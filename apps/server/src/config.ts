@@ -23,6 +23,14 @@ const EnvSchema = z
     // Dictées
     CLIPS_DIR: z.string().default("data/clips"),
     MAX_CLIP_SECONDS: z.coerce.number().int().positive().default(300),
+    /**
+     * Estimation du temps de traitement affichée à l'artisan. Temps de transcription / durée de l'audio :
+     * vide = 1,15 avec Kyutai (mesuré sur la GTX 1660), 0,05 avec le mock.
+     */
+    STT_SPEED_FACTOR: z.preprocess(emptyAsUndefined, z.coerce.number().positive().optional()),
+    /** Durée d'une analyse par le LLM : base, plus un supplément par minute d'audio. */
+    LLM_ESTIMATE_BASE_SECONDS: z.coerce.number().nonnegative().default(8),
+    LLM_ESTIMATE_SECONDS_PER_AUDIO_MINUTE: z.coerce.number().nonnegative().default(4),
 
     // Photos
     PHOTOS_DIR: z.string().default("data/photos"),
