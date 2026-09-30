@@ -1,7 +1,7 @@
 /*
  * E6 — Page client du devis (maquette « Devis Vocal ») : le document posé sur le fond de l'application,
  * le bleu de l'app réservé à l'accord et à la signature.
- * Toujours en clair : c'est un document, imprimable tel quel.
+ * À l'écran, suit le thème clair ou sombre de l'appareil ; à l'impression (PDF), toujours en clair.
  */
 
 .pq-page {
@@ -15,7 +15,6 @@
   --pq-accepted: var(--green);
   --pq-declined: var(--danger);
 
-  color-scheme: light;
   min-height: 100dvh;
   padding: 24px 16px 48px;
   background: var(--pq-concrete);
@@ -399,7 +398,7 @@
   font: inherit;
   font-weight: 400;
   color: var(--pq-ink);
-  background: #ffffff;
+  background: var(--surface);
   border: 0;
   box-shadow: inset 0 0 0 1.5px var(--line-2);
   border-radius: 12px;
@@ -602,7 +601,19 @@
     margin: 14mm;
   }
 
+  /* Palette claire, quel que soit le thème de l'écran : le papier est blanc. */
   .pq-page {
+    --bg: #fff;
+    --surface: #fff;
+    --ink: #16181b;
+    --muted: #6d6f72;
+    --line: #e3e5e8;
+    --line-2: #d5d8dc;
+    --blue: #0079b8;
+    --green: #008a09;
+    --danger: #b3261e;
+
+    color-scheme: light;
     padding: 0;
   }
 
