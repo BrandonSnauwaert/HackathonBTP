@@ -11,17 +11,20 @@ export interface AuthRoutesOptions {
   db: Database;
   sessionTtlDays: number;
   secureCookies: boolean;
+  /** Tentatives autorisées par minute et par adresse IP. */
+  authRateLimit: number;
 }
 
 const UserResponse = z.object({ user: UserSchema });
 
 export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = async (
   app,
-  { db, sessionTtlDays, secureCookies },
+  { db, sessionTtlDays, secureCookies, authRateLimit },
 ) => {
   app.post(
     "/register",
     {
+      config: { rateLimit: { max: authRateLimit, timeWindow: "1 minute" } },
       schema: {
         tags: ["Auth"],
         summary: "Créer un compte artisan (et se connecter)",
@@ -42,11 +45,12 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = async (
   app.post(
     "/login",
     {
+      config: { rateLimit: { max: authRateLimit, timeWindow: "1 minute" } },
       schema: {
         tags: ["Auth"],
         summary: "Se connecter (pose le cookie de session `sid`)",
         body: CredentialsSchema,
-        response: { 200: UserResponse, 401: ErrorResponseSchema },
+        response: { 200: UserResponse, 401: ErrorResponseSchema, 429: ErrorResponseSchema },
       },
     },
     async (request, reply) => {

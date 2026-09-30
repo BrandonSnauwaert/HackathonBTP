@@ -80,8 +80,14 @@ export function useTranscription() {
       }
     };
 
-    socket.onclose = () => {
-      if (socketRef.current === socket) fail("Connexion au serveur perdue");
+    socket.onclose = (event) => {
+      if (socketRef.current !== socket) return;
+      // 4401 : le serveur exige une session (transcription réservée aux utilisateurs connectés).
+      fail(
+        event.code === 4401
+          ? "Connectez-vous d'abord dans l'onglet « Devis & dictées »"
+          : "Connexion au serveur perdue",
+      );
     };
 
     try {

@@ -34,7 +34,7 @@ export interface QuoteServiceOptions {
   /** Dossier des photos (supprimées avec le devis). */
   photosDir: string;
   /** URL publique du front, pour construire le lien envoyé au client (ex. https://devis.mondomaine.fr). */
-  publicBaseUrl: string;
+  publicBaseUrl: () => string;
   /** Envoi des e-mails (SMTP, ou simple log). */
   mailer: Mailer;
 }
@@ -166,7 +166,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
   }
 
   function publicUrl(quote: Quote): string {
-    return `${options.publicBaseUrl.replace(/\/$/, "")}/d/${quote.publicToken}`;
+    return `${options.publicBaseUrl()}/d/${quote.publicToken}`;
   }
 
   function documentOf(userId: string, quote: Quote, preview: boolean): QuoteDocument {
@@ -197,7 +197,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       totalTtcCents: doc.totals.totalTtcCents,
       validUntil: doc.validUntil,
       publicUrl: publicUrl(quote),
-      pixelUrl: `${options.publicBaseUrl.replace(/\/$/, "")}/api/public/quotes/${quote.publicToken}/pixel.gif`,
+      pixelUrl: `${options.publicBaseUrl()}/api/public/quotes/${quote.publicToken}/pixel.gif`,
     });
     try {
       await options.mailer.send({

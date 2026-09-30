@@ -62,7 +62,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Photos de chantier : ajout (renvoi sans doublon), légende, visibilité client, suppression ; réduites sur l'appareil
 - [x] Envoi du devis (lien public) et page client : document avec mentions légales, « Accepter » / « Refuser », impression PDF, suivi (consulté, pixel)
 - [x] Envoi du devis par e-mail (SMTP ; MailHog en local pour la démo, boîte sur http://localhost:8025)
-- [ ] Tunnel HTTPS pour que le lien de l'e-mail et le micro fonctionnent depuis un téléphone
+- [x] Tunnel HTTPS (`npm run tunnel`) : app, liens des e-mails et micro accessibles depuis un téléphone
+- [x] Sécurité minimale avant exposition : transcription réservée aux connectés, connexion limitée à 10 essais/min, sessions expirées purgées
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, e-mail ou lien seul), suivi (ouverture, réponse du client, lien, renvoi de l'e-mail, relance, accepté / refusé). Mobile et ordinateur.
@@ -114,6 +115,9 @@ cd apps/front; npm run dev
 
 # Pages de test de l'API (port 5173, fait proxy de /api, /docs et /ws vers :3000)
 cd apps/web; npm run dev
+
+# 4. (Téléphone, démo) Tunnel HTTPS public : affiche l'adresse et un QR code à scanner
+cd apps/server; npm run tunnel          # fermeture : npm run tunnel -- stop
 ```
 
 ## Vérifier son travail
@@ -233,6 +237,9 @@ interface Transcriber {
 - **Vitesse de Kyutai sur la GTX 1660** : ~1,15× le temps réel. Une dictée de 10 s met ~9 s à être transcrite, auxquelles s'ajoute l'appel au LLM.
 - `batch_size = 2` dans la config Kyutai : 2 flux de transcription simultanés au maximum.
 - **Micro dans le navigateur :** exige HTTPS, sauf sur `localhost`. Pour tester depuis un téléphone, passer par le tunnel HTTPS.
+- **Tunnel (Cloudflare « quick tunnel », conteneur `tunnel`, profil Docker `tunnel`)** : gratuit, sans compte ni domaine, mais **l'adresse change à chaque lancement**. `npm run tunnel` l'écrit dans `data/tunnel-url.txt`, que le serveur relit pour les liens envoyés (pas de redémarrage). Un lien envoyé avec un ancien tunnel ne marche plus : pour la démo, ouvrir le tunnel **avant** d'envoyer les devis, puis ne plus y toucher. Le tunnel réécrit l'en-tête Host en `localhost:5173` (d'où l'acceptation par Vite) et Vite écoute sur toutes les interfaces (`server.host: true`).
+- **Tunnel ouvert = app publique.** Ne pas le laisser tourner inutilement. La transcription en direct (`/ws`) exige une session (code de fermeture 4401 sinon), la connexion est limitée à `AUTH_RATE_LIMIT` essais par minute.
+- **MailHog n'est pas exposé par le tunnel** : pendant la démo, lire l'e-mail sur le PC (http://localhost:8025) ; le lien « Voir le devis » s'ouvre alors sur le PC, ou scanner l'adresse du devis avec le téléphone.
 - **Kyutai ne produit du texte que si on lui envoie de l'audio.** Un clip doit être suivi d'environ 1 s de silence pour que les derniers mots sortent.
 - **Pixel de suivi :** Apple Mail précharge les images (faux « consulté »). Le clic sur « Voir le devis » est le signal fiable.
 - **iOS :** le micro se coupe quand l'écran se verrouille (utiliser la Wake Lock API pendant une dictée), et il n'y a pas de Background Sync (synchroniser sur l'événement `online` et au démarrage de l'app).

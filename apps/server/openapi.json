@@ -1601,13 +1601,18 @@
                     },
                     "email": {
                       "type": "string"
+                    },
+                    "publicUrl": {
+                      "type": "string",
+                      "description": "Adresse utilisée dans les liens envoyés aux clients"
                     }
                   },
                   "required": [
                     "status",
                     "transcriber",
                     "llm",
-                    "email"
+                    "email",
+                    "publicUrl"
                   ],
                   "additionalProperties": false
                 }
@@ -1713,6 +1718,16 @@
             }
           },
           "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
             "description": "Default Response",
             "content": {
               "application/json": {

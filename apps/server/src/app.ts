@@ -15,6 +15,9 @@ import { setupSession } from "./auth/session.js";
 import type { Config } from "./config.js";
 import type { Database } from "./db/database.js";
 import { HttpError } from "./http/errors.js";
+import { createPublicUrlResolver } from "./public-url.js";
+import { deleteExpiredSessions } from "./repositories/users.js";
+import rateLimit from "@fastify/rate-limit";
 import { transformObject } from "./http/openapi.js";
 import { createLineExtractor } from "./llm/create-line-extractor.js";
 import type { LineExtractor } from "./llm/line-extractor.js";
@@ -105,7 +108,17 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
 
+  // Limite de débit, activée route par route (connexion, inscription) : `config.rateLimit`.
+  await app.register(rateLimit, {
+    global: false,
+    errorResponseBuilder: (_request, context) =>
+      new HttpError(429, "too_many_requests", `Trop de tentatives. Réessayez dans ${context.after}.`),
+  });
   await app.register(cookie);
+  app.addHook("onReady", async () => {
+    const removed = deleteExpiredSessions(db);
+    if (removed > 0) app.log.info({ removed }, "sessions expirées supprimées");
+  });
   setupSession(app, db);
   await app.register(websocket);
 
@@ -116,7 +129,13 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
         tags: ["Système"],
         summary: "État du serveur",
         response: {
-          200: z.object({ status: z.literal("ok"), transcriber: z.string(), llm: z.string(), email: z.string() }),
+          200: z.object({
+            status: z.literal("ok"),
+            transcriber: z.string(),
+            llm: z.string(),
+            email: z.string(),
+            publicUrl: z.string().describe("Adresse utilisée dans les liens envoyés aux clients"),
+          }),
         },
       },
     },
@@ -125,14 +144,16 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
       transcriber: config.TRANSCRIBER,
       llm: config.LLM_PROVIDER === "mock" ? "mock" : config.LLM_MODEL,
       email: config.EMAIL_PROVIDER === "log" ? "log (aucun envoi)" : `smtp ${config.SMTP_SERVER}`,
+      publicUrl: publicUrl(),
     }),
   );
 
+  const publicUrl = createPublicUrlResolver(config);
   const quotes = createQuoteService(db, {
     followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
     clipsDir: config.CLIPS_DIR,
     photosDir: config.PHOTOS_DIR,
-    publicBaseUrl: config.PUBLIC_BASE_URL,
+    publicBaseUrl: publicUrl,
     mailer: mailer ?? createMailer(config, app.log),
   });
   const clips = createClipService({
@@ -150,6 +171,7 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
     db,
     sessionTtlDays: config.SESSION_TTL_DAYS,
     secureCookies: config.COOKIE_SECURE,
+    authRateLimit: config.AUTH_RATE_LIMIT,
   });
   await app.register(companyRoutes, { prefix: "/api/company", db });
   await app.register(clientRoutes, { prefix: "/api/clients", db });
