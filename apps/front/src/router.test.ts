@@ -6,6 +6,7 @@ describe("router", () => {
     { name: "home" },
     { name: "profile" },
     { name: "clients" },
+    { name: "stats" },
     { name: "client", id: "c1" },
     { name: "visit", id: "q1" },
     { name: "quote", id: "q1" },

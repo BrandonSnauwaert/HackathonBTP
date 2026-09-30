@@ -23,7 +23,22 @@ export interface QuoteDocument {
   startDate: string | null;
   duration: string;
   paymentTerms: string;
-  company: Omit<Company, "vatExempt" | "defaultValidityDays" | "defaultPaymentTerms" | "updatedAt">;
+  company: Pick<
+    Company,
+    | "name"
+    | "legalForm"
+    | "address"
+    | "phone"
+    | "email"
+    | "siret"
+    | "vatNumber"
+    | "insurerName"
+    | "insurancePolicyNumber"
+    | "insuranceCoverage"
+  > & {
+    /** Logo de l'entreprise ; null : le front affiche le logo par défaut (initiales). */
+    logoUrl: string | null;
+  };
   client: Pick<Client, "name" | "email" | "phone" | "address">;
   lines: {
     position: number;
@@ -37,7 +52,14 @@ export interface QuoteDocument {
   }[];
   totals: Omit<QuoteTotals, "lineTotalsHtCents"> & { vatExempt: boolean; vatMention: string | null };
   photos: { id: string; caption: string; url: string }[];
-  response: { decision: "accepted" | "declined"; name: string; message: string; at: string } | null;
+  response: {
+    decision: "accepted" | "declined";
+    name: string;
+    message: string;
+    at: string;
+    /** Signature tracée au doigt (PNG en data URL), si le client l'a dessinée. */
+    signature: string | null;
+  } | null;
   /** Le client peut encore accepter ou refuser (devis envoyé, ni expiré ni déjà traité). */
   canRespond: boolean;
   /** Aperçu de l'artisan : aucun suivi, pas de boutons de réponse. */
@@ -50,7 +72,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function quoteResponse(quote: Quote): QuoteDocument["response"] {
   const decision = quote.status === "accepted" || quote.status === "declined" ? quote.status : null;
   if (!decision || !quote.respondedAt) return null;
-  return { decision, name: quote.responseName ?? "", message: quote.responseMessage ?? "", at: quote.respondedAt };
+  return {
+    decision,
+    name: quote.responseName ?? "",
+    message: quote.responseMessage ?? "",
+    at: quote.respondedAt,
+    signature: quote.responseSignature,
+  };
 }
 const RESPONDABLE: readonly QuoteStatus[] = ["sent", "viewed", "follow_up"];
 
@@ -62,6 +90,8 @@ export function buildQuoteDocument(input: {
   /** Photos marquées visibles par le client. */
   photos: readonly Photo[];
   photoUrl: (photo: Photo) => string;
+  /** Adresse du logo pour ce lecteur (page publique ou aperçu de l'artisan), null sans logo. */
+  logoUrl: string | null;
   preview: boolean;
 }): QuoteDocument {
   const { quote, company, client, lines, preview } = input;
@@ -91,6 +121,7 @@ export function buildQuoteDocument(input: {
       insurerName: company.insurerName,
       insurancePolicyNumber: company.insurancePolicyNumber,
       insuranceCoverage: company.insuranceCoverage,
+      logoUrl: input.logoUrl,
     },
     client: { name: client.name, email: client.email, phone: client.phone, address: client.address },
     lines: lines.map((line, i) => ({

@@ -85,6 +85,12 @@
           "defaultPaymentTerms": {
             "type": "string",
             "description": "Conditions de paiement par défaut"
+          },
+          "hourlyRateCents": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000000
           }
         }
       },
@@ -354,6 +360,12 @@
           "message": {
             "type": "string",
             "maxLength": 1000
+          },
+          "signature": {
+            "description": "Signature tracée au doigt : image PNG en data URL (facultative, en plus du nom)",
+            "type": "string",
+            "maxLength": 300000,
+            "pattern": "^data:image\\/png;base64,[A-Za-z0-9+/=]+$"
           }
         },
         "required": [
@@ -594,6 +606,18 @@
             "type": "string",
             "description": "Conditions de paiement par défaut"
           },
+          "hourlyRateCents": {
+            "nullable": true,
+            "description": "Taux horaire HT en centimes : prix proposé d'office pour les lignes en heures (null = aucun)",
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "logoUrl": {
+            "nullable": true,
+            "description": "Logo imprimé sur les devis (null = logo par défaut, aux initiales)",
+            "type": "string"
+          },
           "updatedAt": {
             "type": "string",
             "description": "Date ISO 8601"
@@ -613,6 +637,8 @@
           "insuranceCoverage",
           "defaultValidityDays",
           "defaultPaymentTerms",
+          "hourlyRateCents",
+          "logoUrl",
           "updatedAt"
         ],
         "additionalProperties": false
@@ -1087,13 +1113,19 @@
           "at": {
             "type": "string",
             "description": "Date ISO 8601"
+          },
+          "signature": {
+            "nullable": true,
+            "description": "Signature tracée au doigt (image PNG en data URL), si dessinée",
+            "type": "string"
           }
         },
         "required": [
           "decision",
           "name",
           "message",
-          "at"
+          "at",
+          "signature"
         ],
         "additionalProperties": false,
         "description": "Réponse du client depuis la page publique"
@@ -1171,6 +1203,11 @@
               },
               "insuranceCoverage": {
                 "type": "string"
+              },
+              "logoUrl": {
+                "nullable": true,
+                "description": "Logo de l'entreprise (null = logo par défaut, aux initiales)",
+                "type": "string"
               }
             },
             "required": [
@@ -1183,7 +1220,8 @@
               "vatNumber",
               "insurerName",
               "insurancePolicyNumber",
-              "insuranceCoverage"
+              "insuranceCoverage",
+              "logoUrl"
             ],
             "additionalProperties": false
           },
@@ -1457,6 +1495,15 @@
             "description": "Première ouverture de la page par le client",
             "type": "string"
           },
+          "remindedAt": {
+            "nullable": true,
+            "description": "Dernière relance envoyée au client",
+            "type": "string"
+          },
+          "reminderDue": {
+            "type": "boolean",
+            "description": "Relance à faire (« à relancer », pas relancé récemment)"
+          },
           "events": {
             "type": "array",
             "items": {
@@ -1490,6 +1537,8 @@
           "publicUrl",
           "response",
           "viewedAt",
+          "remindedAt",
+          "reminderDue",
           "events"
         ],
         "additionalProperties": false
@@ -1559,6 +1608,25 @@
             "type": "string",
             "description": "Date ISO 8601"
           },
+          "viewedAt": {
+            "nullable": true,
+            "description": "Première ouverture par le client",
+            "type": "string"
+          },
+          "respondedAt": {
+            "nullable": true,
+            "description": "Réponse du client (acceptation ou refus en ligne)",
+            "type": "string"
+          },
+          "remindedAt": {
+            "nullable": true,
+            "description": "Dernière relance envoyée au client",
+            "type": "string"
+          },
+          "reminderDue": {
+            "type": "boolean",
+            "description": "Relance à faire (« à relancer », pas relancé récemment)"
+          },
           "createdAt": {
             "type": "string",
             "description": "Date ISO 8601"
@@ -1580,6 +1648,10 @@
           "unpricedLineCount",
           "lineCount",
           "sentAt",
+          "viewedAt",
+          "respondedAt",
+          "remindedAt",
+          "reminderDue",
           "createdAt",
           "updatedAt"
         ],
@@ -1901,6 +1973,111 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/company/logo": {
+      "put": {
+        "summary": "Remplacer le logo (imprimé sur les devis)",
+        "tags": [
+          "Entreprise"
+        ],
+        "description": "Corps : l'image brute (JPEG, PNG ou WebP, 2 Mo au plus) avec son `Content-Type`. Le type est vérifié sur le contenu du fichier.",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Supprimer le logo (retour au logo par défaut, aux initiales)",
+        "tags": [
+          "Entreprise"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Logo de l'entreprise (image)",
+        "tags": [
+          "Entreprise"
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
@@ -2772,6 +2949,94 @@
           "Devis"
         ],
         "description": "Pour un devis envoyé, consulté ou à relancer : renvoie le même e-mail à l'adresse actuelle du client (corriger l'adresse sur la fiche client si besoin). Le statut et la date du devis ne changent pas.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/quotes/{id}/remind": {
+      "post": {
+        "summary": "Relancer le client en un clic (e-mail de rappel)",
+        "tags": [
+          "Devis"
+        ],
+        "description": "Pour un devis envoyé, consulté ou à relancer : e-mail de rappel au client, avec le même lien. Le statut ne change pas ; `remindedAt` est mis à jour et `reminderDue` repasse à false jusqu'à la prochaine échéance (FOLLOW_UP_AFTER_DAYS jours sans réponse).",
         "parameters": [
           {
             "schema": {
@@ -4291,6 +4556,31 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/public/quotes/{token}/logo": {
+      "get": {
+        "summary": "Logo de l'entreprise (en-tête du devis)",
+        "tags": [
+          "Page client"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{20,64}$"
+            },
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "description": "Secret du lien public du devis"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }

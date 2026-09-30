@@ -176,6 +176,7 @@ export function ClientScreen({ clientId }: { clientId: string }) {
             <span className="r">Montant TTC</span>
             <span>Statut</span>
             <span>Dernière activité</span>
+            <span />
           </div>
           {stats.quotes.length === 0 && <p className="mut empty">Aucun devis pour ce client.</p>}
           {stats.quotes.map((q) => (

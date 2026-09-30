@@ -115,6 +115,10 @@
   border-bottom: 2px solid var(--pq-ink);
 }
 
+.pq-logo {
+  margin-bottom: 14px;
+}
+
 .pq-company h1 {
   font-size: 1.6rem;
   font-weight: 600;
@@ -309,6 +313,66 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.pq-signature:has(.pq-signature-image) {
+  height: auto;
+  min-height: 96px;
+  flex-direction: column;
+  padding: 6px 10px 8px;
+}
+
+.pq-signature-image {
+  display: block;
+  max-width: 100%;
+  height: 72px;
+  object-fit: contain;
+}
+
+.pq-signature-typed {
+  font-size: 0.85rem;
+  color: var(--pq-muted);
+}
+
+/* Zone de signature au doigt (formulaire d'acceptation) */
+.pq-signpad {
+  position: relative;
+  margin-top: 4px;
+}
+
+.pq-signpad canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  border: 2px dashed var(--pq-rule);
+  border-radius: 12px;
+  background: var(--pq-paper);
+  color: var(--pq-workwear); /* couleur du trait */
+  touch-action: none; /* le doigt signe au lieu de faire défiler la page */
+  cursor: crosshair;
+}
+
+.pq-signpad-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--pq-muted);
+  font-weight: 400;
+  pointer-events: none;
+}
+
+.pq-signpad-clear {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--pq-workwear);
+  background: none;
+  border: 0;
+  cursor: pointer;
 }
 
 .pq-signature-hint {

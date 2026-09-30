@@ -16,6 +16,11 @@ export interface Company {
   insuranceCoverage: string;
   defaultValidityDays: number;
   defaultPaymentTerms: string;
+  /** Taux horaire HT, en centimes : prix proposé d'office pour les lignes en heures. */
+  hourlyRateCents: number | null;
+  /** Logo (fichier dans PHOTOS_DIR) ; absent : logo par défaut, aux initiales de l'entreprise. */
+  logoFile: string | null;
+  logoMime: string | null;
   updatedAt: string;
 }
 
@@ -34,6 +39,9 @@ const CompanyRow = z
     insurance_coverage: z.string(),
     default_validity_days: z.number(),
     default_payment_terms: z.string(),
+    hourly_rate_cents: z.number().nullable(),
+    logo_file: z.string().nullable(),
+    logo_mime: z.string().nullable(),
     updated_at: z.string(),
   })
   .transform((r): Company => ({
@@ -50,6 +58,9 @@ const CompanyRow = z
     insuranceCoverage: r.insurance_coverage,
     defaultValidityDays: r.default_validity_days,
     defaultPaymentTerms: r.default_payment_terms,
+    hourlyRateCents: r.hourly_rate_cents,
+    logoFile: r.logo_file,
+    logoMime: r.logo_mime,
     updatedAt: r.updated_at,
   }));
 
@@ -76,6 +87,9 @@ export function updateCompany(db: Database, userId: string, update: CompanyUpdat
     insurance_coverage: update.insuranceCoverage,
     default_validity_days: update.defaultValidityDays,
     default_payment_terms: update.defaultPaymentTerms,
+    hourly_rate_cents: update.hourlyRateCents,
+    logo_file: update.logoFile,
+    logo_mime: update.logoMime,
     updated_at: new Date().toISOString(),
   });
   execute(db, `UPDATE companies SET ${set.sql} WHERE user_id = :userId`, { ...set.params, userId });

@@ -27,6 +27,10 @@ export interface Quote {
   respondedAt: string | null;
   responseName: string | null;
   responseMessage: string | null;
+  /** Signature tracée par le client en acceptant (PNG en data URL), si elle a été dessinée. */
+  responseSignature: string | null;
+  /** Dernière relance envoyée au client. */
+  remindedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +81,8 @@ const QuoteRow = z
     responded_at: z.string().nullable(),
     response_name: z.string().nullable(),
     response_message: z.string().nullable(),
+    response_signature: z.string().nullable(),
+    reminded_at: z.string().nullable(),
     created_at: z.string(),
     updated_at: z.string(),
   })
@@ -98,6 +104,8 @@ const QuoteRow = z
     respondedAt: r.responded_at,
     responseName: r.response_name,
     responseMessage: r.response_message,
+    responseSignature: r.response_signature,
+    remindedAt: r.reminded_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
@@ -187,7 +195,15 @@ export function nextQuoteNumber(db: Database, userId: string, year: number): str
 
 export type NewQuote = Omit<
   Quote,
-  "createdAt" | "updatedAt" | "sentAt" | "viewedAt" | "respondedAt" | "responseName" | "responseMessage"
+  | "createdAt"
+  | "updatedAt"
+  | "sentAt"
+  | "viewedAt"
+  | "respondedAt"
+  | "responseName"
+  | "responseMessage"
+  | "responseSignature"
+  | "remindedAt"
 >;
 
 /** Devis retrouvé par le secret de son lien public, avec son propriétaire. */
@@ -230,6 +246,8 @@ export type QuoteUpdate = PatchOf<
     | "respondedAt"
     | "responseName"
     | "responseMessage"
+    | "responseSignature"
+    | "remindedAt"
   >
 >;
 
@@ -249,6 +267,8 @@ export function updateQuote(db: Database, id: string, update: QuoteUpdate): void
     responded_at: update.respondedAt,
     response_name: update.responseName,
     response_message: update.responseMessage,
+    response_signature: update.responseSignature,
+    reminded_at: update.remindedAt,
     updated_at: new Date().toISOString(),
   });
   execute(db, `UPDATE quotes SET ${set.sql} WHERE id = :id`, { ...set.params, id });

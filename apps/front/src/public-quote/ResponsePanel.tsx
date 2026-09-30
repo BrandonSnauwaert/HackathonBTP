@@ -1,20 +1,24 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { QuoteDocument } from "../api/types";
+import { SignaturePad } from "./SignaturePad";
 
 type Mode = "choice" | "accept" | "decline";
 
 /**
  * Réponse du client : accepter (le nom saisi vaut signature) ou refuser.
- * `onNameChange` permet de dessiner la signature dans le document pendant la saisie.
+ * `onNameChange` et `onSignatureChange` montrent la signature dans le document pendant la saisie :
+ * le nom (obligatoire, vaut signature) et, si le client le souhaite, sa signature tracée au doigt.
  */
 export function ResponsePanel(props: {
   token: string;
   doc: QuoteDocument;
   onAnswered: (doc: QuoteDocument) => void;
   onNameChange: (name: string) => void;
+  onSignatureChange: (signature: string | null) => void;
 }) {
-  const { token, doc, onAnswered, onNameChange } = props;
+  const { token, doc, onAnswered, onNameChange, onSignatureChange } = props;
+  const [signature, setSignature] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("choice");
   const [name, setName] = useState("");
   const [agreed, setAgreed] = useState(false);
@@ -38,7 +42,11 @@ export function ResponsePanel(props: {
   const changeMode = (next: Mode) => {
     setMode(next);
     setError(null);
-    if (next !== "accept") onNameChange("");
+    if (next !== "accept") {
+      onNameChange("");
+      setSignature(null);
+      onSignatureChange(null);
+    }
   };
 
   return (
@@ -63,7 +71,7 @@ export function ResponsePanel(props: {
       )}
 
       {mode === "accept" && (
-        <form onSubmit={(e) => void submit(e, () => api.acceptQuote(token, name.trim(), message.trim()))}>
+        <form onSubmit={(e) => void submit(e, () => api.acceptQuote(token, name.trim(), message.trim(), signature))}>
           <label className="pq-field">
             Votre nom et prénom
             <input
@@ -79,6 +87,15 @@ export function ResponsePanel(props: {
               }}
             />
           </label>
+          <div className="pq-field">
+            Votre signature (facultative, en plus du nom)
+            <SignaturePad
+              onChange={(image) => {
+                setSignature(image);
+                onSignatureChange(image);
+              }}
+            />
+          </div>
           <label className="pq-check">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
             J'ai lu ce devis, reçu avant l'exécution des travaux, et je l'accepte.

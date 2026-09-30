@@ -336,6 +336,119 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/company/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Logo de l'entreprise (image) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /**
+         * Remplacer le logo (imprimé sur les devis)
+         * @description Corps : l'image brute (JPEG, PNG ou WebP, 2 Mo au plus) avec son `Content-Type`. Le type est vérifié sur le contenu du fichier.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Company"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Supprimer le logo (retour au logo par défaut, aux initiales) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Company"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/clients": {
         parameters: {
             query?: never;
@@ -1077,6 +1190,92 @@ export interface paths {
         /**
          * Renvoyer l'e-mail d'un devis déjà envoyé
          * @description Pour un devis envoyé, consulté ou à relancer : renvoie le même e-mail à l'adresse actuelle du client (corriger l'adresse sur la fiche client si besoin). Le statut et la date du devis ne changent pas.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuoteDetail"];
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description Default Response */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quotes/{id}/remind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Relancer le client en un clic (e-mail de rappel)
+         * @description Pour un devis envoyé, consulté ou à relancer : e-mail de rappel au client, avec le même lien. Le statut ne change pas ; `remindedAt` est mis à jour et `reminderDue` repasse à false jusqu'à la prochaine échéance (FOLLOW_UP_AFTER_DAYS jours sans réponse).
          */
         post: {
             parameters: {
@@ -2333,6 +2532,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/quotes/{token}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Logo de l'entreprise (en-tête du devis) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Secret du lien public du devis */
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/public/quotes/{token}/decline": {
         parameters: {
             query?: never;
@@ -2514,6 +2750,7 @@ export interface components {
             defaultValidityDays?: number;
             /** @description Conditions de paiement par défaut */
             defaultPaymentTerms?: string;
+            hourlyRateCents?: number | null;
         };
         ClientCreateInput: {
             name: string;
@@ -2576,6 +2813,8 @@ export interface components {
             /** @description Nom et prénom du client : vaut signature */
             name: string;
             message?: string;
+            /** @description Signature tracée au doigt : image PNG en data URL (facultative, en plus du nom) */
+            signature?: string;
         };
         DeclineQuoteInput: {
             name?: string;
@@ -2661,6 +2900,10 @@ export interface components {
             defaultValidityDays: number;
             /** @description Conditions de paiement par défaut */
             defaultPaymentTerms: string;
+            /** @description Taux horaire HT en centimes : prix proposé d'office pour les lignes en heures (null = aucun) */
+            hourlyRateCents: number | null;
+            /** @description Logo imprimé sur les devis (null = logo par défaut, aux initiales) */
+            logoUrl: string | null;
             /** @description Date ISO 8601 */
             updatedAt: string;
         };
@@ -2814,6 +3057,8 @@ export interface components {
             message: string;
             /** @description Date ISO 8601 */
             at: string;
+            /** @description Signature tracée au doigt (image PNG en data URL), si dessinée */
+            signature: string | null;
         };
         /** @description Le devis tel que le client le voit, avec les mentions légales */
         QuoteDocument: {
@@ -2841,6 +3086,8 @@ export interface components {
                 insurerName: string;
                 insurancePolicyNumber: string;
                 insuranceCoverage: string;
+                /** @description Logo de l'entreprise (null = logo par défaut, aux initiales) */
+                logoUrl: string | null;
             };
             client: {
                 name: string;
@@ -2915,6 +3162,10 @@ export interface components {
             response: components["schemas"]["QuoteResponse"] | null;
             /** @description Première ouverture de la page par le client */
             viewedAt: string | null;
+            /** @description Dernière relance envoyée au client */
+            remindedAt: string | null;
+            /** @description Relance à faire (« à relancer », pas relancé récemment) */
+            reminderDue: boolean;
             events: components["schemas"]["QuoteEvent"][];
         };
         QuoteSummary: {
@@ -2937,6 +3188,14 @@ export interface components {
             lineCount: number;
             /** @description Date ISO 8601 */
             sentAt: string | null;
+            /** @description Première ouverture par le client */
+            viewedAt: string | null;
+            /** @description Réponse du client (acceptation ou refus en ligne) */
+            respondedAt: string | null;
+            /** @description Dernière relance envoyée au client */
+            remindedAt: string | null;
+            /** @description Relance à faire (« à relancer », pas relancé récemment) */
+            reminderDue: boolean;
             /** @description Date ISO 8601 */
             createdAt: string;
             /** @description Date ISO 8601 */

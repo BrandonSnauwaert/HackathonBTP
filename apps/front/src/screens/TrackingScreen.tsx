@@ -3,11 +3,12 @@ import type { QuoteDetail, QuoteEvent, QuoteStatus } from "../api/types";
 import { StatusBadge } from "../components/Badge";
 import { Totals } from "../components/Totals";
 import { useState } from "react";
-import { formatCents, formatDayTime, formatQuantity, formatShortDate } from "../format";
+import { formatCents, formatDayTime, formatQuantity, formatRelative, formatShortDate } from "../format";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { groupByRoom, quoteName } from "../quotes/status";
 import { ClientCard, ClientSheet } from "./ClientSheet";
+import { RemindButton } from "../components/RemindButton";
 
 const STATUS_EVENTS: Record<QuoteStatus, string> = {
   draft: "repassé en brouillon",
@@ -28,6 +29,7 @@ const EVENT_LABELS: Record<string, string> = {
   // Indicatif seulement : Apple Mail précharge les images (faux « ouvert »).
   email_opened: "e-mail affiché (indicatif)",
   email_resent: "e-mail renvoyé",
+  reminder_sent: "relance envoyée par e-mail",
 };
 
 function eventLabel(event: QuoteEvent): string {
@@ -144,12 +146,19 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
         <div className="tracking-col">
           {error && <p className="error-text">{error}</p>}
           {quote.status === "follow_up" && (
-            <div className="card w pad">
+            <div className={`card pad ${quote.reminderDue ? "w" : ""}`}>
               <div className="row start">
-                <div className="ic yellow">↻</div>
-                <span className="b">Relance conseillée</span>
+                <div className={`ic ${quote.reminderDue ? "yellow" : "grey"}`}>↻</div>
+                <span className="b">
+                  {quote.reminderDue
+                    ? "Relance conseillée"
+                    : `Relancé ${quote.remindedAt ? formatRelative(quote.remindedAt) : ""}`}
+                </span>
               </div>
               <div className="h2">{client.name} n'a pas encore répondu.</div>
+              {quote.reminderDue && client.email && (
+                <RemindButton quoteId={quote.id} onDone={() => void load()} className="big" />
+              )}
               <div className="btns">
                 {client.phone && (
                   <a className="btn pri" href={`tel:${client.phone.replace(/\s/g, "")}`}>
@@ -182,6 +191,9 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
                   {response.decision === "accepted" ? "Signé par " : "Par "}
                   <span className="b">{response.name}</span>
                 </div>
+              )}
+              {response.signature && (
+                <img className="signature-image" src={response.signature} alt={`Signature de ${response.name}`} />
               )}
               {response.message && <div className="card flat small">« {response.message} »</div>}
             </div>

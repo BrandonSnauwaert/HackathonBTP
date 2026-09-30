@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { QuoteSummary } from "../api/types";
 import { Logo, type Session } from "../components/AppShell";
-import { formatCents, formatToday, initials } from "../format";
+import { formatToday, initials } from "../format";
 import { FILTERS, isEditable, openQuote, quoteName, type FilterId } from "../quotes/status";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { NewVisitSheet } from "./NewVisitSheet";
 import { QuoteRow } from "../components/QuoteRow";
+import { RemindButton } from "../components/RemindButton";
 import { SORTS, compare, nextSort, type SortId } from "../quotes/sort";
 
-const WAITING = new Set(["sent", "viewed", "follow_up"]);
 const HOME_POLL_MS = 5000;
 
 function SortHeader(props: {
@@ -30,7 +30,7 @@ function SortHeader(props: {
       onClick={() => onSort(nextSort(sort, column))}
     >
       {label}
-      <span aria-hidden="true">{direction === "descending" ? " ↓" : direction === "ascending" ? " ↑" : " ↕"}</span>
+      <span aria-hidden="true">{direction === "descending" ? " ↓" : direction === "ascending" ? " ↑" : " ⇅"}</span>
     </button>
   );
 }
@@ -43,29 +43,34 @@ export function HomeScreen({ session }: { session: Session }) {
   const [creating, setCreating] = useState(false);
   const [sort, setSort] = useState<SortId>("priority");
 
-  // Rafraîchie régulièrement : les statuts changent quand le client ouvre ou accepte un devis.
-  useEffect(() => {
-    const load = () =>
+  const load = useCallback(
+    () =>
       api.listQuotes().then(
         (list) => {
           setQuotes(list);
           setError(null);
         },
         (err: unknown) => setError((previous) => (isNetworkError(err) ? previous : errorMessage(err))),
-      );
+      ),
+    [],
+  );
+
+  // Rafraîchie régulièrement : les statuts changent quand le client ouvre ou accepte un devis.
+  useEffect(() => {
     void load();
     const timer = setInterval(() => document.visibilityState === "visible" && void load(), HOME_POLL_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [load]);
+
+  const remindButton = (q: QuoteSummary) =>
+    q.reminderDue ? <RemindButton quoteId={q.id} onDone={() => void load()} /> : null;
 
   const all = [...(quotes ?? [])].sort(compare(sort));
   const statuses = FILTERS.find((f) => f.id === filter)?.statuses ?? null;
   const shown = statuses ? all.filter((q) => (statuses as readonly string[]).includes(q.status)) : all;
-  const toFollowUp = all.filter((q) => q.status === "follow_up");
+  // Relances à faire : « à relancer » et pas encore relancé (un devis relancé revient au bout du délai).
+  const toFollowUp = all.filter((q) => q.reminderDue);
   const toPrice = all.filter((q) => isEditable(q.status) && q.unpricedLineCount > 0);
-  const sentCount = all.filter((q) => q.sentAt !== null).length;
-  const waitingCount = all.filter((q) => WAITING.has(q.status)).length;
-  const acceptedHt = all.filter((q) => q.status === "accepted").reduce((sum, q) => sum + q.totalHtCents, 0);
   const companyName = session.company?.name || session.user.email;
 
   return (
@@ -77,6 +82,9 @@ export function HomeScreen({ session }: { session: Session }) {
             <span className="b">Devis Vocal</span>
           </div>
           <div className="row start">
+            <button className="btn ghost" onClick={() => navigate({ name: "stats" })}>
+              Stats
+            </button>
             <button className="btn ghost" onClick={() => navigate({ name: "clients" })}>
               Clients
             </button>
@@ -100,16 +108,18 @@ export function HomeScreen({ session }: { session: Session }) {
         {error && <p className="error-text">{error}</p>}
         {(toFollowUp.length > 0 || toPrice.length > 0) && (
           <section className="todo">
-            <h2 className="h2 only-mobile">À faire aujourd'hui</h2>
+            <h2 className="h2">À faire aujourd'hui</h2>
             {toFollowUp.map((q) => (
-              <button key={q.id} className="card w action" onClick={() => openQuote(q)}>
-                <div className="ic yellow">↻</div>
-                <div className="grow">
-                  <div className="b">Relancer {q.client.name}</div>
-                  <div className="small">Pas de réponse depuis l'envoi · {q.title || q.number}</div>
-                </div>
-                <span className="mut">›</span>
-              </button>
+              <div key={q.id} className="card w action">
+                <button className="todo-main" onClick={() => openQuote(q)}>
+                  <div className="ic yellow">↻</div>
+                  <div className="grow">
+                    <div className="b">Relancer {q.client.name}</div>
+                    <div className="small">Pas de réponse depuis l'envoi · {q.title || q.number}</div>
+                  </div>
+                </button>
+                {remindButton(q)}
+              </div>
             ))}
             {toPrice.map((q) => (
               <button key={q.id} className="card info action" onClick={() => openQuote(q)}>
@@ -125,21 +135,6 @@ export function HomeScreen({ session }: { session: Session }) {
             ))}
           </section>
         )}
-
-        <div className="stats">
-          <div className="card stat">
-            <div className="h2">{sentCount}</div>
-            <div className="mut small">devis envoyés</div>
-          </div>
-          <div className="card stat">
-            <div className="h2">{waitingCount}</div>
-            <div className="mut small">en attente</div>
-          </div>
-          <div className="card stat wide">
-            <div className="h2">{formatCents(acceptedHt).replace(/,00\s/, " ")}</div>
-            <div className="mut small">HT acceptés</div>
-          </div>
-        </div>
 
         <div className="list-head">
           <h2 className="h2 only-desktop">Mes devis</h2>
@@ -175,11 +170,12 @@ export function HomeScreen({ session }: { session: Session }) {
             <SortHeader label="Montant TTC" column="amount" sort={sort} onSort={setSort} className="r" />
             <span>Statut</span>
             <SortHeader label="Dernière activité" column="activity" sort={sort} onSort={setSort} />
+            <span className="r">Action</span>
           </div>
           {quotes === null && !error && <p className="mut">Chargement…</p>}
           {quotes !== null && shown.length === 0 && <p className="mut empty">Aucun devis ici.</p>}
           {shown.map((q) => (
-            <QuoteRow key={q.id} quote={q} name={quoteName(q)} />
+            <QuoteRow key={q.id} quote={q} name={quoteName(q)} action={remindButton(q)} />
           ))}
         </div>
       </div>

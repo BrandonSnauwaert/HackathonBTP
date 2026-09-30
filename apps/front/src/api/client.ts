@@ -70,6 +70,9 @@ export const api = {
   logout: () => request<null>("POST", "/auth/logout"),
 
   getCompany: () => request<Company>("GET", "/company"),
+  /** Logo imprimé sur les devis : image déjà réduite sur l'appareil. */
+  uploadLogo: (image: Blob) => request<Company>("PUT", "/company/logo", image),
+  deleteLogo: () => request<Company>("DELETE", "/company/logo"),
   updateCompany: (update: Partial<Omit<Company, "updatedAt">>) => request<Company>("PATCH", "/company", update),
 
   listQuotes: () => request<QuoteSummary[]>("GET", "/quotes"),
@@ -86,6 +89,8 @@ export const api = {
   /** byEmail = false : aucun e-mail, l'artisan partage le lien lui-même. Le devis doit être « prêt ». */
   sendQuote: (id: string, byEmail: boolean) => request<QuoteDetail>("POST", `/quotes/${id}/send`, { byEmail }),
   resendEmail: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/resend`),
+  /** Relance en un clic : e-mail de rappel au client. */
+  remind: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/remind`),
   changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
 
   addLine: (quoteId: string, line: LineCreate) => request<QuoteDetail>("POST", `/quotes/${quoteId}/lines`, line),
@@ -119,8 +124,13 @@ export const api = {
 
   // Page client, sans connexion : l'accès se fait par le secret du lien.
   openPublicQuote: (token: string) => request<QuoteDocument>("GET", `/public/quotes/${token}`),
-  acceptQuote: (token: string, name: string, message: string) =>
-    request<QuoteDocument>("POST", `/public/quotes/${token}/accept`, message ? { name, message } : { name }),
+  /** signature : tracée au doigt (PNG en data URL), en plus du nom qui reste obligatoire. */
+  acceptQuote: (token: string, name: string, message: string, signature: string | null) =>
+    request<QuoteDocument>("POST", `/public/quotes/${token}/accept`, {
+      name,
+      ...(message && { message }),
+      ...(signature && { signature }),
+    }),
   declineQuote: (token: string, message: string) =>
     request<QuoteDocument>("POST", `/public/quotes/${token}/decline`, message ? { message } : {}),
 };

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { allowedTransitions, canTransition, isEditable, timeBasedStatus, type QuoteStatus } from "./quote-status.js";
+import {
+  allowedTransitions,
+  canTransition,
+  isEditable,
+  reminderDue,
+  timeBasedStatus,
+  type QuoteStatus,
+} from "./quote-status.js";
 
 describe("canTransition", () => {
   it("suit le parcours nominal", () => {
@@ -67,5 +74,28 @@ describe("timeBasedStatus", () => {
     assert.equal(run("draft", 100, null), null);
     assert.equal(run("accepted", 100), null);
     assert.equal(run("declined", 100), null);
+  });
+});
+
+describe("reminderDue", () => {
+  const now = new Date("2026-10-02T12:00:00.000Z");
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const due = (status: QuoteStatus, remindedAt: Date | null) =>
+    reminderDue({ status, remindedAt, followUpAfterDays: 7, now });
+
+  it("est due pour un devis à relancer jamais relancé", () => {
+    assert.equal(due("follow_up", null), true);
+  });
+
+  it("ne l'est plus juste après une relance, et le redevient au bout du délai", () => {
+    assert.equal(due("follow_up", daysAgo(0)), false);
+    assert.equal(due("follow_up", daysAgo(6.9)), false);
+    assert.equal(due("follow_up", daysAgo(7)), true);
+  });
+
+  it("ne concerne que les devis à relancer", () => {
+    for (const status of ["draft", "sent", "viewed", "accepted", "declined", "expired"] as const) {
+      assert.equal(due(status, null), false, status);
+    }
   });
 });

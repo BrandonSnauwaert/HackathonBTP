@@ -3,7 +3,7 @@ import { activityDate } from "./status";
 
 /** Tri de la liste des devis (accueil). */
 
-/** Par défaut : les devis à relancer d'abord (action attendue), puis la dernière activité. */
+/** Par défaut : les relances à faire d'abord (action attendue), puis la dernière activité. */
 export type SortId = "priority" | "amount-desc" | "amount-asc" | "activity-desc" | "activity-asc";
 
 export const SORTS: { id: SortId; label: string }[] = [
@@ -19,7 +19,7 @@ const byActivity = (a: QuoteSummary, b: QuoteSummary) => activityDate(b).localeC
 export function compare(sort: SortId): (a: QuoteSummary, b: QuoteSummary) => number {
   switch (sort) {
     case "priority":
-      return (a, b) => Number(b.status === "follow_up") - Number(a.status === "follow_up") || byActivity(a, b);
+      return (a, b) => Number(b.reminderDue) - Number(a.reminderDue) || byActivity(a, b);
     case "activity-desc":
       return byActivity;
     case "activity-asc":

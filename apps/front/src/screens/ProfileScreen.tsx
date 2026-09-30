@@ -2,6 +2,9 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
 import type { Company } from "../api/types";
 import type { Session } from "../components/AppShell";
+import { CompanyLogo } from "../components/CompanyLogo";
+import { centsToInput, parseEuros } from "../format";
+import { resizeImage } from "../images/resizeImage";
 import { errorMessage } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { useTheme, type ThemeChoice } from "../theme";
@@ -35,9 +38,58 @@ function ThemeSection() {
   );
 }
 
-type CompanyForm = Omit<Company, "updatedAt">;
+type CompanyForm = Omit<Company, "updatedAt" | "logoUrl">;
 
-const toForm = ({ updatedAt: _updatedAt, ...form }: Company): CompanyForm => form;
+const toForm = ({ updatedAt: _updatedAt, logoUrl: _logoUrl, ...form }: Company): CompanyForm => form;
+
+/** Logo imprimé sur les devis : enregistré dès qu'il est choisi, hors du bouton « Enregistrer ». */
+function LogoSection({ company, onSaved }: { company: Company; onSaved: (company: Company) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (action: () => Promise<Company>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await action());
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title="Logo" hint="Imprimé en tête de vos devis. Sans logo, vos initiales sont utilisées.">
+      <div className="row start logo-row">
+        <CompanyLogo name={company.name} logoUrl={company.logoUrl} size={72} />
+        <div className="btns wrap">
+          <label className={`btn ghost ${busy ? "dis" : ""}`}>
+            {busy ? "Envoi…" : company.logoUrl ? "Changer le logo" : "Choisir un logo"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              hidden
+              disabled={busy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file)
+                  void run(async () => api.uploadLogo(await resizeImage(file, { maxSide: 512, type: "image/png" })));
+              }}
+            />
+          </label>
+          {company.logoUrl && (
+            <button type="button" className="btn ghost danger" disabled={busy} onClick={() => void run(api.deleteLogo)}>
+              Revenir au logo par défaut
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <p className="error-text">{error}</p>}
+    </Section>
+  );
+}
 
 /** Champs modifiés seulement : l'API accepte un profil partiel. */
 function changes(form: CompanyForm, saved: CompanyForm): Partial<CompanyForm> {
@@ -76,7 +128,9 @@ function ProfileForm(props: { session: Session; company: Company; onSaved: (comp
 
   const diff = changes(form, saved);
   const dirty = Object.keys(diff).length > 0;
-  const validityOk = Number.isInteger(form.defaultValidityDays) && form.defaultValidityDays >= 1;
+  const [rate, setRate] = useState(centsToInput(company.hourlyRateCents));
+  const rateOk = parseEuros(rate) !== undefined;
+  const validityOk = Number.isInteger(form.defaultValidityDays) && form.defaultValidityDays >= 1 && rateOk;
 
   const set = <K extends keyof CompanyForm>(key: K, value: CompanyForm[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -115,6 +169,8 @@ function ProfileForm(props: { session: Session; company: Company; onSaved: (comp
       </header>
 
       <div className="bd profile-body">
+        <LogoSection company={company} onSaved={onSaved} />
+
         <Section title="Coordonnées">
           <label className="field">
             <span>Nom commercial ou raison sociale</span>
@@ -198,6 +254,24 @@ function ProfileForm(props: { session: Session; company: Company; onSaved: (comp
 
         <Section title="Nouveaux devis" hint="Valeurs proposées par défaut, modifiables sur chaque devis.">
           <label className="field">
+            <span>Taux horaire HT (€/h)</span>
+            <input
+              inputMode="decimal"
+              placeholder="45"
+              value={rate}
+              onChange={(e) => {
+                setRate(e.target.value);
+                const cents = parseEuros(e.target.value);
+                if (cents !== undefined) set("hourlyRateCents", cents);
+              }}
+            />
+            <small className="mut">
+              {rateOk
+                ? "Proposé d'office sur les lignes en heures : indiquez le nombre d'heures, le prix se calcule."
+                : "Montant invalide : par exemple 45 ou 45,50."}
+            </small>
+          </label>
+          <label className="field">
             <span>Durée de validité (jours)</span>
             <input
               type="number"
@@ -231,7 +305,9 @@ function ProfileForm(props: { session: Session; company: Company; onSaved: (comp
       <footer className="ft profile-ft">
         {error && <p className="error-text">{error}</p>}
         {!validityOk && (
-          <p className="warn-text small">La durée de validité doit être comprise entre 1 et 365 jours.</p>
+          <p className="warn-text small">
+            {rateOk ? "La durée de validité doit être comprise entre 1 et 365 jours." : "Taux horaire invalide."}
+          </p>
         )}
         <button
           type="submit"

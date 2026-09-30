@@ -1,7 +1,8 @@
 import { createReadStream } from "node:fs";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { ErrorResponseSchema } from "../http/errors.js";
+import { ErrorResponseSchema, HttpError } from "../http/errors.js";
+import { detectImageType } from "../images/image-type.js";
 import { AcceptQuoteSchema, DeclineQuoteSchema, QuoteDocumentSchema } from "../http/schemas.js";
 import type { QuoteService } from "../services/quote-service.js";
 
@@ -47,7 +48,25 @@ export const publicRoutes: FastifyPluginAsyncZod<{ quotes: QuoteService }> = asy
         response: { 200: QuoteDocumentSchema, ...errors },
       },
     },
-    async (request) => quotes.respond(request.params.token, "accepted", request.body),
+    async (request) => {
+      const { signature } = request.body;
+      // Le format est vérifié par le schéma ; le contenu doit être une vraie image PNG.
+      if (signature && detectImageType(Buffer.from(signature.split(",")[1] ?? "", "base64")) !== "image/png") {
+        throw new HttpError(400, "invalid_signature", "La signature n'est pas une image valide");
+      }
+      return quotes.respond(request.params.token, "accepted", request.body);
+    },
+  );
+
+  app.get(
+    "/:token/logo",
+    {
+      schema: { tags, summary: "Logo de l'entreprise (en-tête du devis)", params: TokenParams },
+    },
+    async (request, reply) => {
+      const { path, mimeType } = quotes.publicLogoFile(request.params.token);
+      return reply.type(mimeType).header("cache-control", "public, max-age=86400").send(createReadStream(path));
+    },
   );
 
   app.post(

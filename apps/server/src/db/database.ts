@@ -160,6 +160,17 @@ const MIGRATIONS: readonly string[] = [
   -- Type d'enregistrement : dictée talkie-walkie, ou segment d'une écoute passive de la visite.
   ALTER TABLE clips ADD COLUMN kind TEXT NOT NULL DEFAULT 'dictation';
   `,
+  `
+  -- Relance en un clic : date du dernier e-mail de relance au client.
+  ALTER TABLE quotes ADD COLUMN reminded_at TEXT;
+  -- Signature tracée au doigt par le client en acceptant (image PNG, en data URL).
+  ALTER TABLE quotes ADD COLUMN response_signature TEXT;
+  -- Taux horaire HT de l'artisan : prix proposé d'office pour les lignes en heures.
+  ALTER TABLE companies ADD COLUMN hourly_rate_cents INTEGER;
+  -- Logo de l'entreprise, imprimé sur les devis (fichier dans PHOTOS_DIR).
+  ALTER TABLE companies ADD COLUMN logo_file TEXT;
+  ALTER TABLE companies ADD COLUMN logo_mime TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Database {

@@ -76,6 +76,7 @@ updateCompany(db, user.id, {
   insuranceCoverage: "France métropolitaine",
   defaultValidityDays: 30,
   defaultPaymentTerms: "Acompte de 30 % à la signature, solde à la réception des travaux.",
+  hourlyRateCents: 4500,
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -90,7 +91,111 @@ interface DemoQuote {
   history: [QuoteStatus, number, "artisan" | "client"][];
 }
 
+/** Devis des mois passés (une ligne chacun) : de quoi remplir le tableau de bord de la démo. */
+function pastQuote(
+  client: DemoQuote["client"],
+  title: string,
+  line: LineInput,
+  history: DemoQuote["history"],
+): DemoQuote {
+  return { client, title, siteAddress: client.address.replace("\n", ", "), lines: [line], history };
+}
+
+const pastQuotes: DemoQuote[] = [
+  pastQuote(
+    { name: "Mme Claire Moreau", email: "c.moreau@example.com", phone: "", address: "5 rue Mercière\n69002 Lyon" },
+    "Ravalement de façade",
+    {
+      description: "Ravalement de façade, nettoyage et peinture",
+      room: "Façade",
+      quantity: 1,
+      unit: "forfait",
+      unitPriceCents: 820000,
+      vatRateBp: 1000,
+    },
+    [
+      ["ready", 155, "artisan"],
+      ["sent", 155, "artisan"],
+      ["viewed", 154, "client"],
+      ["accepted", 150, "client"],
+    ],
+  ),
+  pastQuote(
+    { name: "M. Julien Petit", email: "j.petit@example.com", phone: "", address: "22 cours Gambetta\n69003 Lyon" },
+    "Remplacement des fenêtres",
+    {
+      description: "Fenêtre PVC double vitrage, fourniture et pose",
+      room: "Séjour",
+      quantity: 6,
+      unit: "u",
+      unitPriceCents: 68000,
+      vatRateBp: 550,
+    },
+    [
+      ["ready", 122, "artisan"],
+      ["sent", 122, "artisan"],
+      ["viewed", 121, "client"],
+      ["accepted", 118, "client"],
+    ],
+  ),
+  pastQuote(
+    { name: "Mme Nadia Haddad", email: "n.haddad@example.com", phone: "", address: "3 rue Garibaldi\n69006 Lyon" },
+    "Pose de parquet",
+    {
+      description: "Parquet chêne massif, fourniture et pose",
+      room: "Chambre",
+      quantity: 38,
+      unit: "m2",
+      unitPriceCents: 5500,
+      vatRateBp: 1000,
+    },
+    [
+      ["ready", 95, "artisan"],
+      ["sent", 95, "artisan"],
+      ["viewed", 93, "client"],
+      ["declined", 90, "client"],
+    ],
+  ),
+  pastQuote(
+    { name: "M. Thomas Girard", email: "t.girard@example.com", phone: "", address: "40 quai Perrache\n69002 Lyon" },
+    "Rénovation électrique",
+    {
+      description: "Mise aux normes du tableau et des circuits",
+      room: "Logement",
+      quantity: 1,
+      unit: "forfait",
+      unitPriceCents: 460000,
+      vatRateBp: 1000,
+    },
+    [
+      ["ready", 64, "artisan"],
+      ["sent", 64, "artisan"],
+      ["viewed", 62, "client"],
+      ["accepted", 60, "client"],
+    ],
+  ),
+  pastQuote(
+    { name: "Mme Léa Roux", email: "l.roux@example.com", phone: "", address: "12 montée du Gourguillon\n69005 Lyon" },
+    "Douche à l'italienne",
+    {
+      description: "Création d'une douche à l'italienne",
+      room: "Salle de bain",
+      quantity: 1,
+      unit: "forfait",
+      unitPriceCents: 390000,
+      vatRateBp: 1000,
+    },
+    [
+      ["ready", 35, "artisan"],
+      ["sent", 35, "artisan"],
+      ["viewed", 34, "client"],
+      ["accepted", 31, "client"],
+    ],
+  ),
+];
+
 const demoQuotes: DemoQuote[] = [
+  ...pastQuotes,
   {
     client: {
       name: "Mme Sophie Durand",
@@ -251,7 +356,20 @@ for (const demo of demoQuotes) {
   });
   for (const [to, ago, actor] of demo.history) {
     const at = daysAgo(ago);
-    updateQuote(db, quote.id, to === "sent" ? { status: to, sentAt: at.toISOString() } : { status: to });
+    const iso = at.toISOString();
+    // Dates d'ouverture et de réponse du client : le tableau de bord (délais, mois de signature) en dépend.
+    const answered = (to === "accepted" || to === "declined") && actor === "client";
+    updateQuote(
+      db,
+      quote.id,
+      to === "sent"
+        ? { status: to, sentAt: iso }
+        : to === "viewed"
+          ? { status: to, viewedAt: iso }
+          : answered
+            ? { status: to, respondedAt: iso, responseName: demo.client.name }
+            : { status: to },
+    );
     insertEvent(db, quote.id, { type: "status_changed", actor, fromStatus: from, toStatus: to, at });
     from = to;
   }

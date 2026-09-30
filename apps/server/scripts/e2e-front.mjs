@@ -85,8 +85,12 @@ async function open(path) {
   await send("Page.navigate", { url: front + path });
   // Recharger avant que la navigation ait abouti la ferait annuler (page restée sur about:blank).
   await waitUntil(async () => (await ev("location.href")).startsWith(front), 5000, 100);
+  // Changement de hash seul : on s'assure qu'il est bien pris avant de recharger.
+  const hash = path.includes("#") ? path.slice(path.indexOf("#")) : "";
+  if (hash && (await ev("location.hash")) !== hash) await ev(`location.hash = ${JSON.stringify(hash)}`);
   await send("Page.reload");
   await sleep(2000);
+  if (hash && (await ev("location.hash")) !== hash) throw new Error(`navigation vers ${path} impossible`);
 }
 const text = (selector) =>
   ev(`[...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => e.textContent.trim()).join(" | ")`);
@@ -276,12 +280,50 @@ try {
   const viewed = await waitUntil(async () => (await text("header .bdg")).includes("Consulté"), 8000);
   await expectThat("suivi : « Consulté » affiché sans recharger la page", viewed, await text("header .bdg"));
 
+  // 6 bis. Le client accepte : nom et signature tracée au doigt (ici à la souris)
+  await setViewport(390, 844, true);
+  await send("Page.navigate", { url: `${front}/d/${token}` });
+  await sleep(2000);
+  await clickText("button", "Accepter le devis");
+  await sleep(300);
+  await ev(`(() => {
+    const input = document.querySelector(".pq-field input");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "Sophie Durand");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector(".pq-signpad canvas").scrollIntoView({ block: "center" });
+  })()`);
+  await sleep(300);
+  const pad = await ev(
+    `(() => { const r = document.querySelector(".pq-signpad canvas").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`,
+  );
+  await mouse("mousePressed", { x: pad.x + pad.w * 0.1, y: pad.y + pad.h / 2 });
+  for (let i = 0; i <= 30; i++) {
+    const x = pad.x + pad.w * (0.1 + (0.8 * i) / 30);
+    const y = pad.y + pad.h / 2 + Math.sin(i / 3) * pad.h * 0.25;
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "left", buttons: 1 });
+  }
+  await mouse("mouseReleased", { x: pad.x + pad.w * 0.9, y: pad.y + pad.h / 2 });
+  await ev(`document.querySelector(".pq-check input").click()`);
+  await clickText("button", "Signer et accepter");
+  const signed = await waitUntil(async () => (await api(`/quotes/${quote.id}`)).status === "accepted", 8000);
+  detail = await api(`/quotes/${quote.id}`);
+  await expectThat(
+    "page client : acceptation avec le nom et la signature tracée, visible dans le document",
+    signed &&
+      detail.response?.name === "Sophie Durand" &&
+      (detail.response?.signature ?? "").startsWith("data:image/png;base64,") &&
+      (await ev(`Boolean(document.querySelector(".pq-signature-image"))`)),
+    `${detail.status} / ${detail.response?.name} / signature ${detail.response?.signature ? "présente" : "absente"}`,
+  );
+  await setViewport(1280, 900, false);
+
   // 7. Client existant proposé dans « Nouvelle visite », sans doublon
   const clientsBefore = (await api("/clients")).length;
   await open("/#/");
   await clickText("button", "Nouvelle visite");
   await sleep(400);
-  await fill("Client", clientName.slice(0, 12));
+  // Nom complet : il existe plusieurs clients « E2E … » (5 suggestions au plus).
+  await fill("Client", clientName.toLowerCase());
   await sleep(300);
   await clickText(".suggestions button", clientName);
   await sleep(300);

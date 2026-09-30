@@ -849,6 +849,368 @@ a {
   padding: 8px 12px;
 }
 
+/* --- Logo de l'entreprise (devis, Mon entreprise) */
+
+.company-logo {
+  display: block;
+  border-radius: 14px;
+  object-fit: contain;
+  flex: none;
+}
+
+/* Logo par défaut : initiales de l'entreprise, toujours lisible (y compris imprimé). */
+.company-logo.default {
+  display: grid;
+  place-items: center;
+  background: #0079b8;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.logo-row {
+  gap: 16px;
+}
+
+.btns.wrap {
+  flex-wrap: wrap;
+}
+
+/* --- Tableau de bord (E1) : indicateurs, entonnoir, chiffre signé par mois */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.card.kpi {
+  gap: 2px;
+  padding: 12px 14px;
+}
+
+.kpi-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--grey-text);
+}
+
+.kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: proportional-nums;
+}
+
+.kpi-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Jauge : piste d'une teinte plus claire du même bleu. */
+.meter {
+  height: 6px;
+  margin: 6px 0 2px;
+  border-radius: 3px;
+  background: var(--blue-soft);
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--blue);
+  transform-origin: left;
+  animation: grow-x 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.perf {
+  display: grid;
+  gap: 10px;
+  order: 10; /* téléphone : après la liste des devis, qui reste la priorité */
+}
+
+.chart {
+  margin: 0;
+  gap: 14px;
+}
+
+.chart-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-block: auto; /* centrée dans la carte, à hauteur du graphique voisin */
+}
+
+.funnel-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.funnel-label {
+  color: var(--grey-text);
+}
+
+.funnel-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.funnel-bar {
+  height: 20px;
+  min-width: 4px;
+  max-width: calc(100% - 64px);
+  border-radius: 0 4px 4px 0;
+  background: var(--dash);
+  transform-origin: left;
+  animation: grow-x 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.funnel-bar.accent {
+  background: var(--blue);
+}
+
+.funnel-value {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.columns {
+  position: relative;
+  height: 190px;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+
+.columns .gridline {
+  bottom: calc(26px + (100% - 26px) * var(--f, 0));
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 8px;
+}
+
+.column-plot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.column-bar {
+  width: min(24px, 70%);
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--blue);
+  transform-origin: bottom;
+  animation: grow-y 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.column.on .column-bar,
+.column:focus-visible .column-bar {
+  filter: brightness(1.15);
+}
+
+.column-value {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -4px);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.column-label {
+  height: 20px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chart-tip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 6px 18px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
+.chart-table summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.chart-table table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.chart-table .r {
+  text-align: right;
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter > span,
+  .funnel-bar,
+  .column-bar {
+    animation: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .kpi-value {
+    font-size: 30px;
+  }
+
+  .perf {
+    order: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+
+/* --- Relance en un clic */
+
+.qrow.card {
+  cursor: pointer;
+}
+
+.q-action {
+  grid-area: action;
+  justify-self: end;
+}
+
+.q-action:empty {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .qrow:has(.q-action:not(:empty)) {
+    grid-template-areas:
+      "name amount"
+      "status activity"
+      "action action";
+  }
+
+  .q-action {
+    justify-self: stretch;
+  }
+}
+
+.remind {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn.remind-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 15px;
+  flex: none;
+  background: var(--yellow);
+  color: var(--on-yellow);
+  box-shadow: none;
+}
+
+.btn.remind-btn:disabled {
+  background: var(--green-soft);
+  color: var(--green-dark);
+}
+
+.todo-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.btn.remind-btn.big {
+  min-height: 52px;
+  font-size: 17px;
+  width: 100%;
+}
+
+.remind:has(.big) {
+  width: 100%;
+}
+
+/* Signature du client (suivi) : trait bleu sur fond clair, lisible dans les deux thèmes. */
+.signature-image {
+  display: block;
+  max-width: 280px;
+  width: 100%;
+  background: #fff;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
 /* --- Clients */
 
 .green-text {
@@ -1519,6 +1881,12 @@ a {
     grid-template-columns: 1fr 1fr;
   }
 
+  /* Titre au-dessus des deux colonnes d'actions, comme « Mes devis » au-dessus de la liste. */
+  .home .todo .h2 {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
   .stats {
     gap: 14px;
   }
@@ -1544,8 +1912,8 @@ a {
 
   .qrow,
   .qrow.card {
-    grid-template-columns: 1.4fr 1fr 1.3fr 1.6fr;
-    grid-template-areas: "name amount status activity";
+    grid-template-columns: 1.4fr 1fr 1.3fr 1.6fr 130px;
+    grid-template-areas: "name amount status activity action";
     border-radius: 0;
     box-shadow: none;
     border-bottom: 1px solid var(--surface-2);

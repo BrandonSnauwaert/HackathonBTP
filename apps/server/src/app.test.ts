@@ -64,11 +64,13 @@ const fakeMailer: Mailer & { sent: EmailMessage[]; failNext: boolean } = {
 };
 
 let app: FastifyInstance;
+/** Base de test, accessible pour simuler le temps qui passe (dates d'envoi). */
+const db = openDatabase(":memory:");
 
 before(async () => {
   app = await buildApp({
     config,
-    db: openDatabase(":memory:"),
+    db,
     logger: false,
     extractor: flakyExtractor,
     mailer: fakeMailer,
@@ -755,6 +757,140 @@ describe("API", () => {
       res = await api("POST", `/api/quotes/${quote.id}/resend`);
       assert.equal(res.statusCode, 502);
       assert.equal(res.json().error, "email_failed");
+    });
+
+    it("relance en un clic : e-mail de rappel, relance faite jusqu'à la prochaine échéance", async () => {
+      const { api, quote } = await readyQuote("relance@test.fr");
+      let res = await api("POST", `/api/quotes/${quote.id}/remind`);
+      assert.equal(res.statusCode, 409, "un brouillon ne se relance pas");
+
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const sent = (await api("POST", `/api/quotes/${quote.id}/send`)).json();
+      assert.equal(sent.reminderDue, false, "pas de relance le jour de l'envoi");
+
+      // 8 jours sans réponse : le devis passe « à relancer », relance due.
+      const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+      db.prepare("UPDATE quotes SET sent_at = ? WHERE id = ?").run(eightDaysAgo, quote.id);
+      const summary = (await api("GET", "/api/quotes")).json().find((q: { id: string }) => q.id === quote.id);
+      assert.equal(summary.status, "follow_up");
+      assert.equal(summary.reminderDue, true);
+
+      fakeMailer.sent.length = 0;
+      res = await api("POST", `/api/quotes/${quote.id}/remind`);
+      assert.equal(res.statusCode, 200, res.body);
+      const mail = fakeMailer.sent[0];
+      assert.equal(mail?.to.address, "durand@example.com");
+      assert.match(mail?.subject ?? "", /^Rappel : votre devis/);
+      assert.ok(mail?.html.includes(sent.publicUrl), "même lien que l'envoi");
+
+      const detail = res.json();
+      assert.equal(detail.status, "follow_up", "toujours en attente de réponse");
+      assert.equal(detail.reminderDue, false, "relance faite");
+      assert.ok(detail.remindedAt);
+      assert.ok(detail.events.some((e: { type: string }) => e.type === "reminder_sent"));
+
+      fakeMailer.failNext = true;
+      res = await api("POST", `/api/quotes/${quote.id}/remind`);
+      assert.equal(res.statusCode, 502, "e-mail en échec : l'artisan est prévenu");
+    });
+
+    it("signature au doigt en plus du nom, et avis à l'artisan quand le client répond", async () => {
+      const png =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+      const { api, quote } = await readyQuote("signature@test.fr");
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const sent = (await api("POST", `/api/quotes/${quote.id}/send`)).json();
+      const token = tokenOf(sent.publicUrl);
+
+      let res = await publicApi("POST", `${token}/accept`, {
+        name: "Sophie Durand",
+        signature: "data:image/png;base64,AAAA",
+      });
+      assert.equal(res.statusCode, 400, "une signature doit être une vraie image");
+      res = await publicApi("POST", `${token}/accept`, { name: "Sophie Durand", signature: "<svg>" });
+      assert.equal(res.statusCode, 400);
+
+      fakeMailer.sent.length = 0;
+      res = await publicApi("POST", `${token}/accept`, { name: "Sophie Durand", signature: png });
+      assert.equal(res.statusCode, 200, res.body);
+      assert.equal(res.json().response.signature, png);
+      assert.equal(res.json().response.name, "Sophie Durand", "le nom reste obligatoire");
+      assert.equal((await api("GET", `/api/quotes/${quote.id}`)).json().response.signature, png);
+
+      const notice = fakeMailer.sent.find((m) => m.to.address === "contact@martin.test");
+      assert.ok(notice, "l'artisan est prévenu, à l'adresse de son profil");
+      assert.match(notice.subject, /a accepté le devis/);
+      assert.ok(notice.html.includes(`/#/devis/${quote.id}/suivi`), "lien vers le suivi");
+
+      // Refus : avis aussi, sans signature.
+      const other = await readyQuote("refus@test.fr");
+      await other.api("POST", `/api/quotes/${other.quote.id}/status`, { status: "ready" });
+      const otherToken = tokenOf((await other.api("POST", `/api/quotes/${other.quote.id}/send`)).json().publicUrl);
+      fakeMailer.sent.length = 0;
+      res = await publicApi("POST", `${otherToken}/decline`, { message: "Trop cher" });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.json().response.signature, null);
+      assert.match(fakeMailer.sent[0]?.subject ?? "", /a refusé le devis/);
+      assert.ok(fakeMailer.sent[0]?.text.includes("Trop cher"));
+    });
+
+    it("logo : envoi, lecture, page client, retour au logo par défaut", async () => {
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      const { api, quote } = await readyQuote("logo@test.fr");
+      assert.equal((await api("GET", "/api/company")).json().logoUrl, null, "logo par défaut");
+
+      const put = (payload: Buffer, type: string) =>
+        app.inject({
+          method: "PUT",
+          url: "/api/company/logo",
+          headers: { "content-type": type },
+          cookies: api.cookies,
+          payload,
+        });
+      assert.equal((await put(Buffer.from("pas une image"), "image/png")).statusCode, 400);
+      let res = await put(png, "image/png");
+      assert.equal(res.statusCode, 200, res.body);
+      assert.match(res.json().logoUrl, /^\/api\/company\/logo\?v=/);
+      const logo = await api("GET", "/api/company/logo");
+      assert.equal(logo.statusCode, 200);
+      assert.equal(logo.headers["content-type"], "image/png");
+
+      await api("POST", `/api/quotes/${quote.id}/status`, { status: "ready" });
+      const token = tokenOf((await api("POST", `/api/quotes/${quote.id}/send`)).json().publicUrl);
+      const doc = (await publicApi("GET", token)).json();
+      assert.match(doc.company.logoUrl, new RegExp(`^/api/public/quotes/${token}/logo`));
+      assert.equal((await publicApi("GET", `${token}/logo`)).statusCode, 200);
+      assert.equal((await app.inject({ method: "GET", url: "/api/company/logo" })).statusCode, 401);
+
+      res = await api("DELETE", "/api/company/logo");
+      assert.equal(res.json().logoUrl, null);
+      assert.equal((await publicApi("GET", `${token}/logo`)).statusCode, 404);
+    });
+
+    it("taux horaire : prix proposé d'office pour les lignes en heures sans prix", async () => {
+      const { api, quote } = await readyQuote("taux@test.fr");
+      const company = (await api("PATCH", "/api/company", { hourlyRateCents: 4500 })).json();
+      assert.equal(company.hourlyRateCents, 4500);
+
+      const add = async (line: object) =>
+        (await api("POST", `/api/quotes/${quote.id}/lines`, { vatRateBp: 1000, ...line })).json().lines.at(-1);
+      assert.equal((await add({ description: "Main d'œuvre", quantity: 6, unit: "h" })).unitPriceCents, 4500);
+      assert.equal(
+        (await add({ description: "Main d'œuvre", quantity: 2, unit: "h", unitPriceCents: 6000 })).unitPriceCents,
+        6000,
+        "un prix saisi n'est pas remplacé",
+      );
+      const other = await add({ description: "Plinthes", quantity: 12, unit: "ml" });
+      assert.equal(other.unitPriceCents, null, "seulement pour les heures");
+
+      const updated = (await api("PATCH", `/api/quotes/${quote.id}/lines/${other.id}`, { unit: "h" })).json();
+      assert.equal(updated.lines.find((l: { id: string }) => l.id === other.id).unitPriceCents, 4500);
+
+      await api("PATCH", "/api/company", { hourlyRateCents: null });
+      assert.equal((await add({ description: "Main d'œuvre", quantity: 1, unit: "h" })).unitPriceCents, null);
     });
 
     it("refuse un lien inconnu ou mal formé", async () => {

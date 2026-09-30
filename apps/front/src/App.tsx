@@ -5,6 +5,7 @@ import { AppShell, type Session } from "./components/AppShell";
 import { useRoute } from "./router";
 import { ClientScreen, ClientsScreen } from "./screens/ClientsScreen";
 import { HomeScreen } from "./screens/HomeScreen";
+import { StatsScreen } from "./screens/StatsScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
 import { QuoteScreen } from "./screens/QuoteScreen";
@@ -83,10 +84,11 @@ export default function App() {
     <AppShell session={session} route={route}>
       {route.name === "home" && <HomeScreen session={session} />}
       {route.name === "clients" && <ClientsScreen />}
+      {route.name === "stats" && <StatsScreen />}
       {route.name === "client" && <ClientScreen key={route.id} clientId={route.id} />}
       {route.name === "profile" && <ProfileScreen session={session} onSaved={setCompany} />}
       {route.name === "visit" && <VisitScreen key={route.id} quoteId={route.id} />}
-      {route.name === "quote" && <QuoteScreen key={route.id} quoteId={route.id} />}
+      {route.name === "quote" && <QuoteScreen key={route.id} quoteId={route.id} company={company} />}
       {route.name === "send" && <SendScreen key={route.id} quoteId={route.id} company={company} />}
       {route.name === "tracking" && <TrackingScreen key={route.id} quoteId={route.id} />}
     </AppShell>

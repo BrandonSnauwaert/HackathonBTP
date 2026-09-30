@@ -14,6 +14,7 @@ type State = { status: "loading" } | { status: "error"; message: string } | { st
 export default function PublicQuotePage({ source }: { source: PublicQuoteSource }) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [signatureName, setSignatureName] = useState("");
+  const [signatureImage, setSignatureImage] = useState<string | null>(null);
 
   // Valeurs simples en dépendances : un nouvel objet `source` identique ne recharge pas le devis.
   const token = source.kind === "public" ? source.token : null;
@@ -74,15 +75,17 @@ export default function PublicQuotePage({ source }: { source: PublicQuoteSource 
         </button>
       </div>
 
-      <QuoteSheet doc={doc} signatureName={signatureName} />
+      <QuoteSheet doc={doc} signatureName={signatureName} signatureImage={signatureImage} />
 
       {doc.canRespond && source.kind === "public" && (
         <ResponsePanel
           token={source.token}
           doc={doc}
           onNameChange={setSignatureName}
+          onSignatureChange={setSignatureImage}
           onAnswered={(answered) => {
             setSignatureName("");
+            setSignatureImage(null);
             setState({ status: "ready", doc: answered });
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}

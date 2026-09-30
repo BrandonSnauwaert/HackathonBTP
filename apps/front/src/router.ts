@@ -5,6 +5,7 @@ export type Route =
   | { name: "home" }
   | { name: "profile" }
   | { name: "clients" }
+  | { name: "stats" }
   | { name: "client"; id: string }
   | { name: "visit"; id: string }
   | { name: "quote"; id: string }
@@ -14,6 +15,7 @@ export type Route =
 export function parseRoute(hash: string): Route {
   const [screen, id, sub] = hash.replace(/^#\/?/, "").split("/");
   if (screen === "profil") return { name: "profile" };
+  if (screen === "statistiques") return { name: "stats" };
   if (screen === "clients") return id ? { name: "client", id } : { name: "clients" };
   if (screen === "visite" && id) return { name: "visit", id };
   if (screen === "devis" && id) {
@@ -32,6 +34,8 @@ export function routePath(route: Route): string {
       return "#/profil";
     case "clients":
       return "#/clients";
+    case "stats":
+      return "#/statistiques";
     case "client":
       return `#/clients/${route.id}`;
     case "visit":

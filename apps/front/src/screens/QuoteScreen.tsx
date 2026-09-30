@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api/client";
+import type { Company } from "../api/types";
 import { useClipRecorder } from "../audio/useClipRecorder";
 import { StatusBadge } from "../components/Badge";
 import { ClipCards } from "../components/ClipCards";
@@ -16,10 +17,11 @@ import { ClientCard, ClientSheet } from "./ClientSheet";
 import { NewLineSheet } from "./NewLineSheet";
 
 /** E3 — Devis : lignes regroupées par pièce, prix et TVA à compléter, dictée d'une modification. */
-export function QuoteScreen({ quoteId }: { quoteId: string }) {
+export function QuoteScreen({ quoteId, company }: { quoteId: string; company: Company | null }) {
   const { quote, error, uploads, load, run, send, addClip, retryClip } = useQuote(quoteId);
   const recorder = useClipRecorder();
-  const [sheet, setSheet] = useState<"line" | "client" | null>(null);
+  const [sheet, setSheet] = useState<"line" | "labor" | "client" | null>(null);
+  const hourlyRateCents = company?.hourlyRateCents ?? null;
 
   if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
 
@@ -131,6 +133,11 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
                 + Ajouter une ligne
               </button>
             )}
+            {editable && hourlyRateCents !== null && (
+              <button className="btn ghost" onClick={() => setSheet("labor")}>
+                + Main d'œuvre ({formatCents(hourlyRateCents)}/h)
+              </button>
+            )}
             <a className="btn ghost" href={`/apercu/${quote.id}`}>
               Aperçu du document
             </a>
@@ -189,9 +196,11 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
         {sendButton}
       </footer>
 
-      {sheet === "line" && (
+      {(sheet === "line" || sheet === "labor") && (
         <NewLineSheet
           quote={quote}
+          hourlyRateCents={hourlyRateCents}
+          labor={sheet === "labor"}
           rooms={groupByRoom(quote.lines).map((g) => g.room)}
           onClose={() => setSheet(null)}
           run={run}

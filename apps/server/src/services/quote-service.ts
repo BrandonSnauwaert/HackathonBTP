@@ -7,6 +7,7 @@ import {
   allowedTransitions,
   canTransition,
   isEditable,
+  reminderDue,
   timeBasedStatus,
   type Actor,
   type QuoteStatus,
@@ -16,11 +17,12 @@ import { UNIT_LABELS } from "../domain/units.js";
 import { HttpError, conflict } from "../http/errors.js";
 import { countLinesByClip, listClips, toClipView, type ClipView } from "../repositories/clips.js";
 import { createClient, getClient, type Client, type ClientInput } from "../repositories/clients.js";
-import { companyIssues, getCompany } from "../repositories/companies.js";
+import { findUserById } from "../repositories/users.js";
+import { companyIssues, getCompany, type Company } from "../repositories/companies.js";
 import { getPhoto, listPhotos, toPhotoView, type PhotoView } from "../repositories/photos.js";
 import { buildQuoteDocument, quoteResponse, type QuoteDocument } from "./quote-document.js";
 import { EmailError, type Mailer } from "../email/mailer.js";
-import { buildQuoteEmail } from "../email/quote-email.js";
+import { buildQuoteEmail, buildReminderEmail, buildResponseNotification } from "../email/quote-email.js";
 import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
 import type { ExtractedLine } from "../llm/line-extractor.js";
@@ -40,6 +42,8 @@ export interface QuoteServiceOptions {
   mailer: Mailer;
   /** Fin estimée des dictées en cours (absent : pas d'estimation). */
   estimateClips?: ClipEstimator;
+  /** Erreur d'une tâche de fond (e-mail d'avis à l'artisan) : à journaliser. */
+  onBackgroundError?: (err: unknown, message: string) => void;
 }
 
 export type QuoteLineView = QuoteLine & { unitLabel: string; totalHtCents: number | null };
@@ -72,6 +76,10 @@ export interface QuoteDetail {
   /** Réponse du client, s'il a accepté ou refusé en ligne. */
   response: QuoteDocument["response"];
   viewedAt: string | null;
+  /** Dernière relance envoyée au client. */
+  remindedAt: string | null;
+  /** Relance à faire : « à relancer » et pas relancé depuis FOLLOW_UP_AFTER_DAYS jours. */
+  reminderDue: boolean;
   events: QuoteEvent[];
 }
 
@@ -87,6 +95,12 @@ export interface QuoteSummary {
   unpricedLineCount: number;
   lineCount: number;
   sentAt: string | null;
+  /** Première ouverture par le client (tableau de bord : taux de consultation, délais). */
+  viewedAt: string | null;
+  /** Réponse du client (tableau de bord : délai de réponse). */
+  respondedAt: string | null;
+  remindedAt: string | null;
+  reminderDue: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,6 +121,11 @@ const RESENDABLE: readonly QuoteStatus[] = ["sent", "viewed", "follow_up"];
 const MANUAL_STATUSES: readonly QuoteStatus[] = ["draft", "ready", "accepted", "declined"];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Adresse du logo pour un lecteur donné (la date de modification évite un logo périmé en cache), ou null. */
+export function logoUrlOf(company: Company, base: string): string | null {
+  return company.logoFile ? `${base}?v=${encodeURIComponent(company.updatedAt)}` : null;
+}
 
 export function createQuoteService(db: Database, options: QuoteServiceOptions) {
   /** Applique les statuts automatiques (relance, expiration) avant toute lecture. */
@@ -129,6 +148,25 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       });
     });
     return { ...quote, status: next };
+  }
+
+  function isReminderDue(quote: Quote, now = new Date()): boolean {
+    return reminderDue({
+      status: quote.status,
+      remindedAt: quote.remindedAt ? new Date(quote.remindedAt) : null,
+      followUpAfterDays: options.followUpAfterDays,
+      now,
+    });
+  }
+
+  /** Ligne en heures sans prix : le taux horaire de l'artisan est proposé d'office (c'est le code qui chiffre). */
+  function withHourlyRate<T extends { unit?: string | undefined; unitPriceCents?: number | null | undefined }>(
+    company: Company,
+    line: T,
+  ): T {
+    if (line.unit !== "h" || company.hourlyRateCents === null) return line;
+    if (line.unitPriceCents !== undefined && line.unitPriceCents !== null) return line;
+    return { ...line, unitPriceCents: company.hourlyRateCents };
   }
 
   function loadEditable(userId: string, quoteId: string): Quote {
@@ -177,25 +215,32 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
   }
 
   function documentOf(userId: string, quote: Quote, preview: boolean): QuoteDocument {
+    const company = getCompany(db, userId);
     return buildQuoteDocument({
       quote,
-      company: getCompany(db, userId),
+      company,
       client: getClient(db, userId, quote.clientId),
       lines: repo.listLines(db, quote.id),
       photos: listPhotos(db, quote.id).filter((p) => p.visibleToClient),
       photoUrl: (photo) =>
         preview ? toPhotoView(photo).url : `/api/public/quotes/${quote.publicToken}/photos/${photo.id}`,
+      logoUrl: logoUrlOf(company, preview ? "/api/company/logo" : `/api/public/quotes/${quote.publicToken}/logo`),
       preview,
     });
   }
 
   /** E-mail du devis au client (adresse actuelle de la fiche client). `failure` : fin du message d'erreur. */
-  async function emailQuote(userId: string, quote: Quote, failure: string): Promise<void> {
+  async function emailQuote(
+    userId: string,
+    quote: Quote,
+    failure: string,
+    kind: "quote" | "reminder" = "quote",
+  ): Promise<void> {
     const company = getCompany(db, userId);
     const client = getClient(db, userId, quote.clientId);
     if (!client.email) throw conflict("client_email_missing", "Le client n'a pas d'adresse e-mail");
     const doc = documentOf(userId, quote, false);
-    const email = buildQuoteEmail({
+    const email = (kind === "reminder" ? buildReminderEmail : buildQuoteEmail)({
       companyName: company.name,
       companyPhone: company.phone,
       clientName: client.name,
@@ -217,6 +262,31 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       const message = err instanceof EmailError ? err.message : "L'e-mail n'a pas pu être envoyé";
       throw new HttpError(502, "email_failed", `${message}. ${failure}`);
     }
+  }
+
+  /**
+   * Avis à l'artisan quand son client répond en ligne (adresse du profil, sinon celle du compte).
+   * Envoyé en tâche de fond : un échec d'e-mail ne doit pas faire échouer la réponse du client.
+   */
+  function notifyArtisan(userId: string, quote: Quote, decision: "accepted" | "declined"): void {
+    const company = getCompany(db, userId);
+    const to = company.email || findUserById(db, userId)?.email;
+    if (!to) return;
+    const client = getClient(db, userId, quote.clientId);
+    const { totals } = documentOf(userId, quote, false);
+    const email = buildResponseNotification({
+      decision,
+      clientName: client.name,
+      signedName: quote.responseName ?? client.name,
+      message: quote.responseMessage ?? "",
+      quoteNumber: quote.number,
+      title: quote.title,
+      totalTtcCents: totals.totalTtcCents,
+      trackingUrl: `${options.publicBaseUrl()}/#/devis/${quote.id}/suivi`,
+    });
+    options.mailer
+      .send({ to: { address: to, name: company.name }, fromName: "Devis Vocal", ...email })
+      .catch((err: unknown) => options.onBackgroundError?.(err, "avis de réponse à l'artisan non envoyé"));
   }
 
   /** Devis accessible par son lien public : uniquement une fois envoyé (jamais un brouillon). */
@@ -265,6 +335,8 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       publicUrl: isEditable(quote.status) ? null : publicUrl(quote),
       response: quoteResponse(quote),
       viewedAt: quote.viewedAt,
+      remindedAt: quote.remindedAt,
+      reminderDue: isReminderDue(quote),
       events: repo.listEvents(db, quote.id),
     };
   }
@@ -295,6 +367,10 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
             unpricedLineCount: totals.unpricedLineCount,
             lineCount: lines.length,
             sentAt: quote.sentAt,
+            viewedAt: quote.viewedAt,
+            respondedAt: quote.respondedAt,
+            remindedAt: quote.remindedAt,
+            reminderDue: isReminderDue(quote),
             createdAt: quote.createdAt,
             updatedAt: quote.updatedAt,
           };
@@ -361,7 +437,10 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       const quote = loadEditable(userId, quoteId);
       if (lines.length === 0) return;
       transaction(db, () => {
-        for (const line of lines) repo.insertLine(db, quote.id, { ...line, source: "dictation", clipId });
+        const company = getCompany(db, userId);
+        for (const line of lines) {
+          repo.insertLine(db, quote.id, withHourlyRate(company, { ...line, source: "dictation" as const, clipId }));
+        }
         touch(quote);
       });
     },
@@ -410,6 +489,23 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       return detail(userId, quoteId);
     },
 
+    /**
+     * Relance en un clic : e-mail de rappel au client (même lien, même suivi). Le statut ne change pas ;
+     * la date de relance fait sortir le devis des relances à faire jusqu'à la prochaine échéance.
+     */
+    async remind(userId: string, quoteId: string): Promise<QuoteDetail> {
+      const quote = refresh(repo.getQuote(db, userId, quoteId));
+      if (!RESENDABLE.includes(quote.status)) {
+        throw conflict("quote_not_sent", `Un devis « ${STATUS_LABELS[quote.status]} » ne peut pas être relancé`);
+      }
+      await emailQuote(userId, quote, "Aucune relance n'a été envoyée.", "reminder");
+      transaction(db, () => {
+        repo.updateQuote(db, quote.id, { remindedAt: new Date().toISOString() });
+        repo.insertEvent(db, quote.id, { type: "reminder_sent", actor: "artisan" });
+      });
+      return detail(userId, quoteId);
+    },
+
     /** Aperçu du document pour l'artisan, à tout moment (aucun suivi). */
     preview(userId: string, quoteId: string): QuoteDocument {
       return documentOf(userId, refresh(repo.getQuote(db, userId, quoteId)), true);
@@ -442,7 +538,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     respond(
       token: string,
       decision: "accepted" | "declined",
-      answer: { name: string; message?: string | undefined },
+      answer: { name: string; message?: string | undefined; signature?: string | undefined },
     ): QuoteDocument {
       const { quote, userId } = findPublic(token);
       if (quote.status === "accepted" || quote.status === "declined") {
@@ -458,6 +554,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
           respondedAt: new Date().toISOString(),
           responseName: answer.name,
           responseMessage: answer.message ?? "",
+          responseSignature: decision === "accepted" ? (answer.signature ?? null) : null,
         });
         repo.insertEvent(db, quote.id, {
           type: "status_changed",
@@ -466,7 +563,16 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
           toStatus: decision,
         });
       });
+      notifyArtisan(userId, repo.getQuote(db, userId, quote.id), decision);
       return documentOf(userId, repo.getQuote(db, userId, quote.id), false);
+    },
+
+    /** Logo de l'entreprise, pour la page publique du devis. */
+    publicLogoFile(token: string): { path: string; mimeType: string } {
+      const { userId } = findPublic(token);
+      const company = getCompany(db, userId);
+      if (!company.logoFile || !company.logoMime) throw new HttpError(404, "not_found", "Pas de logo");
+      return { path: join(options.photosDir, company.logoFile), mimeType: company.logoMime };
     },
 
     /** Photo partagée avec le client (les autres restent privées). */
@@ -512,7 +618,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     addLine(userId: string, quoteId: string, input: LineInput): QuoteDetail {
       const quote = loadEditable(userId, quoteId);
       transaction(db, () => {
-        repo.insertLine(db, quote.id, input);
+        repo.insertLine(db, quote.id, withHourlyRate(getCompany(db, userId), input));
         touch(quote);
       });
       return detail(userId, quoteId);
@@ -521,7 +627,13 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
     updateLine(userId: string, quoteId: string, lineId: string, update: PatchOf<LineInput>): QuoteDetail {
       const quote = loadEditable(userId, quoteId);
       transaction(db, () => {
-        repo.updateLine(db, quote.id, lineId, update);
+        // Passage d'une ligne sans prix en heures : le taux horaire est proposé.
+        const current = repo.listLines(db, quote.id).find((l) => l.id === lineId);
+        const priced =
+          update.unit === "h" && update.unitPriceCents === undefined && current?.unitPriceCents === null
+            ? withHourlyRate(getCompany(db, userId), { ...update, unitPriceCents: null })
+            : update;
+        repo.updateLine(db, quote.id, lineId, priced);
         touch(quote);
       });
       return detail(userId, quoteId);

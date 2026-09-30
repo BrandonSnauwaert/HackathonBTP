@@ -1,4 +1,5 @@
 import type { QuoteDocument } from "../api/types";
+import { CompanyLogo } from "../components/CompanyLogo";
 import { formatCents, formatFullDate, formatQuantity, formatVat } from "../format";
 
 type Line = QuoteDocument["lines"][number];
@@ -16,17 +17,21 @@ function groupByRoom(lines: readonly Line[]): { room: string; lines: Line[] }[] 
 
 /**
  * Le document du devis, tel qu'il est remis au client (écran et impression).
- * `signatureName` : nom en cours de saisie par le client, dessiné dans le bloc « Bon pour accord ».
+ * `signatureName` / `signatureImage` : nom et signature au doigt en cours de saisie par le client,
+ * montrés dans le bloc « Bon pour accord » (puis ceux enregistrés, une fois le devis accepté).
  */
-export function QuoteSheet({ doc, signatureName }: { doc: QuoteDocument; signatureName: string }) {
+export function QuoteSheet(props: { doc: QuoteDocument; signatureName: string; signatureImage?: string | null }) {
+  const { doc, signatureName } = props;
   const { company, client, totals } = doc;
   const accepted = doc.response?.decision === "accepted" ? doc.response : null;
   const signature = accepted?.name ?? signatureName.trim();
+  const signatureImage = accepted ? accepted.signature : (props.signatureImage ?? null);
 
   return (
     <article className="pq-sheet">
       <header className="pq-letterhead">
         <div className="pq-company">
+          <CompanyLogo name={company.name} logoUrl={company.logoUrl} size={64} className="pq-logo" />
           <h1>{company.name}</h1>
           <p className="pq-multiline">{company.address}</p>
           <p>
@@ -168,7 +173,12 @@ export function QuoteSheet({ doc, signatureName }: { doc: QuoteDocument; signatu
       <section className="pq-agreement" aria-label="Bon pour accord">
         <p>Devis reçu avant l'exécution des travaux. Bon pour accord.</p>
         <div className={`pq-signature ${accepted ? "pq-signed" : ""}`}>
-          {signature ? (
+          {signatureImage ? (
+            <>
+              <img className="pq-signature-image" src={signatureImage} alt={`Signature de ${signature || "client"}`} />
+              {signature && <span className="pq-signature-typed">{signature}</span>}
+            </>
+          ) : signature ? (
             <span className="pq-signature-name">{signature}</span>
           ) : (
             <span className="pq-signature-hint">Date et signature du client</span>

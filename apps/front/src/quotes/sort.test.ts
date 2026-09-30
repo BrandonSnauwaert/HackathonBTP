@@ -7,6 +7,7 @@ const recent = quoteSummary({ number: "recent", totalTtcCents: 10_000, updatedAt
 const followUp = quoteSummary({
   number: "follow_up",
   status: "follow_up",
+  reminderDue: true,
   totalTtcCents: 20_000,
   updatedAt: "2026-08-15T08:00:00.000Z",
 });
@@ -27,6 +28,11 @@ describe("compare", () => {
   it("trie par dernière activité, sans priorité pour les devis à relancer", () => {
     expect(numbers([...all].sort(compare("activity-desc")))).toEqual(["recent", "old", "follow_up"]);
     expect(numbers([...all].sort(compare("activity-asc")))).toEqual(["follow_up", "old", "recent"]);
+  });
+
+  it("un devis déjà relancé ne passe plus en tête, jusqu'à la prochaine échéance", () => {
+    const reminded = quoteSummary({ ...followUp, number: "reminded", reminderDue: false });
+    expect(numbers([old, reminded, recent].sort(compare("priority")))).toEqual(["recent", "old", "reminded"]);
   });
 
   it("prend la date d'envoi comme activité d'un devis envoyé", () => {

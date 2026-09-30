@@ -25,6 +25,9 @@ export const CredentialsSchema = z
 
 export const UserSchema = z.object({ id: z.uuid(), email: z.string(), createdAt: isoDate }).meta({ id: "User" });
 
+/** Signature tracée au doigt, en data URL : largement assez pour une image PNG de 600 × 200 px. */
+export const MAX_SIGNATURE_CHARS = 300_000;
+
 // --- Profil entreprise
 
 export const CompanySchema = z
@@ -42,12 +45,21 @@ export const CompanySchema = z
     insuranceCoverage: z.string().describe("Couverture géographique de l'assurance"),
     defaultValidityDays: z.number().int().describe("Durée de validité par défaut des devis, en jours"),
     defaultPaymentTerms: z.string().describe("Conditions de paiement par défaut"),
+    hourlyRateCents: z
+      .number()
+      .int()
+      .nullable()
+      .describe("Taux horaire HT en centimes : prix proposé d'office pour les lignes en heures (null = aucun)"),
+    logoUrl: z.string().nullable().describe("Logo imprimé sur les devis (null = logo par défaut, aux initiales)"),
     updatedAt: isoDate,
   })
   .meta({ id: "Company" });
 
-export const CompanyUpdateSchema = CompanySchema.omit({ updatedAt: true })
-  .extend({ defaultValidityDays: z.number().int().min(1).max(365) })
+export const CompanyUpdateSchema = CompanySchema.omit({ updatedAt: true, logoUrl: true })
+  .extend({
+    defaultValidityDays: z.number().int().min(1).max(365),
+    hourlyRateCents: z.number().int().min(0).max(10_000_000).nullable(),
+  })
   .partial()
   .meta({ id: "CompanyUpdate" });
 
@@ -198,6 +210,7 @@ export const QuoteResponseSchema = z
     name: z.string().describe("Nom saisi par le client (vaut signature pour une acceptation)"),
     message: z.string(),
     at: isoDate,
+    signature: z.string().nullable().describe("Signature tracée au doigt (image PNG en data URL), si dessinée"),
   })
   .meta({ id: "QuoteResponse", description: "Réponse du client depuis la page publique" });
 
@@ -225,6 +238,7 @@ export const QuoteDocumentSchema = z
       insurerName: z.string(),
       insurancePolicyNumber: z.string(),
       insuranceCoverage: z.string(),
+      logoUrl: z.string().nullable().describe("Logo de l'entreprise (null = logo par défaut, aux initiales)"),
     }),
     client: z.object({ name: z.string(), email: z.string(), phone: z.string(), address: z.string() }),
     lines: z.array(
@@ -262,6 +276,12 @@ export const AcceptQuoteSchema = z
   .object({
     name: z.string().trim().min(2).max(100).describe("Nom et prénom du client : vaut signature"),
     message: z.string().max(1000).optional(),
+    signature: z
+      .string()
+      .max(MAX_SIGNATURE_CHARS)
+      .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/)
+      .optional()
+      .describe("Signature tracée au doigt : image PNG en data URL (facultative, en plus du nom)"),
   })
   .meta({ id: "AcceptQuote" });
 
@@ -299,6 +319,8 @@ export const QuoteDetailSchema = z
     publicUrl: z.string().nullable().describe("Lien de la page client (null tant que le devis n'est pas envoyé)"),
     response: QuoteResponseSchema.nullable(),
     viewedAt: isoDate.nullable().describe("Première ouverture de la page par le client"),
+    remindedAt: isoDate.nullable().describe("Dernière relance envoyée au client"),
+    reminderDue: z.boolean().describe("Relance à faire (« à relancer », pas relancé récemment)"),
     events: z.array(QuoteEventSchema),
   })
   .meta({ id: "QuoteDetail" });
@@ -316,6 +338,10 @@ export const QuoteSummarySchema = z
     unpricedLineCount: z.number().int(),
     lineCount: z.number().int(),
     sentAt: isoDate.nullable(),
+    viewedAt: isoDate.nullable().describe("Première ouverture par le client"),
+    respondedAt: isoDate.nullable().describe("Réponse du client (acceptation ou refus en ligne)"),
+    remindedAt: isoDate.nullable().describe("Dernière relance envoyée au client"),
+    reminderDue: z.boolean().describe("Relance à faire (« à relancer », pas relancé récemment)"),
     createdAt: isoDate,
     updatedAt: isoDate,
   })

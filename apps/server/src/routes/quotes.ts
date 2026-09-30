@@ -167,6 +167,24 @@ export const quoteRoutes: FastifyPluginAsyncZod<{ quotes: QuoteService }> = asyn
     async (request) => quotes.resendEmail(requireUser(request).id, request.params.id),
   );
 
+  app.post(
+    "/:id/remind",
+    {
+      schema: {
+        tags: quoteTags,
+        security,
+        summary: "Relancer le client en un clic (e-mail de rappel)",
+        description:
+          "Pour un devis envoyé, consulté ou à relancer : e-mail de rappel au client, avec le même lien. " +
+          "Le statut ne change pas ; `remindedAt` est mis à jour et `reminderDue` repasse à false " +
+          "jusqu'à la prochaine échéance (FOLLOW_UP_AFTER_DAYS jours sans réponse).",
+        params: IdParams,
+        response: { 200: QuoteDetailSchema, 502: ErrorResponseSchema, ...errors },
+      },
+    },
+    async (request) => quotes.remind(requireUser(request).id, request.params.id),
+  );
+
   app.get(
     "/:id/document",
     {

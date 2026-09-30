@@ -90,3 +90,19 @@ export function timeBasedStatus(input: TimeBasedInput): QuoteStatus | null {
   }
   return null;
 }
+
+/**
+ * Une relance est due pour un devis « à relancer » jamais relancé, ou dont la dernière relance date
+ * d'au moins `followUpAfterDays` jours. Le statut ne change pas (toujours en attente de réponse) :
+ * un devis relancé quitte seulement la liste des actions à faire, jusqu'à la prochaine échéance.
+ */
+export function reminderDue(input: {
+  status: QuoteStatus;
+  remindedAt: Date | null;
+  followUpAfterDays: number;
+  now: Date;
+}): boolean {
+  if (input.status !== "follow_up") return false;
+  if (input.remindedAt === null) return true;
+  return input.now.getTime() - input.remindedAt.getTime() >= input.followUpAfterDays * DAY_MS;
+}

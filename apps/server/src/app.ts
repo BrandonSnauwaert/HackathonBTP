@@ -157,6 +157,7 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
   });
   const quotes = createQuoteService(db, {
     estimateClips,
+    onBackgroundError: (err, message) => app.log.error({ err }, message),
     followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
     clipsDir: config.CLIPS_DIR,
     photosDir: config.PHOTOS_DIR,
@@ -181,7 +182,7 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
     secureCookies: config.COOKIE_SECURE,
     authRateLimit: config.AUTH_RATE_LIMIT,
   });
-  await app.register(companyRoutes, { prefix: "/api/company", db });
+  await app.register(companyRoutes, { prefix: "/api/company", db, logosDir: config.PHOTOS_DIR });
   await app.register(clientRoutes, { prefix: "/api/clients", db });
   await app.register(quoteRoutes, { prefix: "/api/quotes", quotes });
   // WAV PCM 16 bits 24 kHz ≈ 2,9 Mo par minute, plus de la marge pour les fréquences plus élevées.

@@ -4,12 +4,16 @@ const JPEG_QUALITY = 0.82;
 
 /**
  * Réduit une photo avant l'envoi : une photo de téléphone (3 à 12 Mo) passe à ~200-400 Ko.
- * L'orientation EXIF est appliquée (photo prise en portrait). Renvoie un JPEG.
+ * L'orientation EXIF est appliquée (photo prise en portrait). Renvoie un JPEG par défaut ;
+ * un logo passe en PNG 512 px (transparence conservée).
  */
-export async function resizeImage(file: Blob): Promise<Blob> {
+export async function resizeImage(
+  file: Blob,
+  { maxSide = MAX_SIDE, type = "image/jpeg" }: { maxSide?: number; type?: "image/jpeg" | "image/png" } = {},
+): Promise<Blob> {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   try {
-    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
     const width = Math.round(bitmap.width * scale);
     const height = Math.round(bitmap.height * scale);
 
@@ -23,7 +27,7 @@ export async function resizeImage(file: Blob): Promise<Blob> {
     return await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
         (blob) => (blob ? resolve(blob) : reject(new Error("Conversion de la photo impossible"))),
-        "image/jpeg",
+        type,
         JPEG_QUALITY,
       ),
     );
