@@ -1,4 +1,18 @@
-import type { ApiErrorBody, Clip, Company, Photo, QuoteDetail, QuoteStatus, QuoteSummary, User } from "./types";
+import type {
+  ApiErrorBody,
+  Client,
+  Clip,
+  Company,
+  LineCreate,
+  LineUpdate,
+  Photo,
+  QuoteDetail,
+  QuoteDocument,
+  QuoteStatus,
+  QuoteSummary,
+  QuoteUpdate,
+  User,
+} from "./types";
 
 /** Erreur renvoyée par l'API : `code` est stable, `message` est affichable tel quel. */
 export class ApiError extends Error {
@@ -55,23 +69,23 @@ export const api = {
   logout: () => request<null>("POST", "/auth/logout"),
 
   getCompany: () => request<Company>("GET", "/company"),
+  updateCompany: (update: Partial<Omit<Company, "updatedAt">>) => request<Company>("PATCH", "/company", update),
 
   listQuotes: () => request<QuoteSummary[]>("GET", "/quotes"),
   getQuote: (id: string) => request<QuoteDetail>("GET", `/quotes/${id}`),
   createQuote: (client: { name: string; email?: string; phone?: string }, title: string, siteAddress: string) =>
     request<QuoteDetail>("POST", "/quotes", { client, title, siteAddress }),
-  updateQuote: (id: string, update: { startDate?: string | null; duration?: string }) =>
-    request<QuoteDetail>("PATCH", `/quotes/${id}`, update),
+  updateQuote: (id: string, update: QuoteUpdate) => request<QuoteDetail>("PATCH", `/quotes/${id}`, update),
+  /** Document tel que le client le verra (aperçu de l'artisan, sans suivi). */
+  previewDocument: (id: string) => request<QuoteDocument>("GET", `/quotes/${id}/document`),
   /** byEmail = false : aucun e-mail, l'artisan partage le lien lui-même. Le devis doit être « prêt ». */
   sendQuote: (id: string, byEmail: boolean) => request<QuoteDetail>("POST", `/quotes/${id}/send`, { byEmail }),
   resendEmail: (id: string) => request<QuoteDetail>("POST", `/quotes/${id}/resend`),
   changeStatus: (id: string, status: QuoteStatus) => request<QuoteDetail>("POST", `/quotes/${id}/status`, { status }),
 
-  updateLine: (
-    quoteId: string,
-    lineId: string,
-    update: { quantity?: number; unitPriceCents?: number | null; vatRateBp?: number },
-  ) => request<QuoteDetail>("PATCH", `/quotes/${quoteId}/lines/${lineId}`, update),
+  addLine: (quoteId: string, line: LineCreate) => request<QuoteDetail>("POST", `/quotes/${quoteId}/lines`, line),
+  updateLine: (quoteId: string, lineId: string, update: LineUpdate) =>
+    request<QuoteDetail>("PATCH", `/quotes/${quoteId}/lines/${lineId}`, update),
   deleteLine: (quoteId: string, lineId: string) => request<QuoteDetail>("DELETE", `/quotes/${quoteId}/lines/${lineId}`),
 
   uploadClip: (quoteId: string, wav: Blob, clientClipId: string, recordedAt: Date) =>
@@ -92,4 +106,14 @@ export const api = {
   updatePhoto: (quoteId: string, photoId: string, update: { caption?: string; visibleToClient?: boolean }) =>
     request<Photo>("PATCH", `/quotes/${quoteId}/photos/${photoId}`, update),
   deletePhoto: (quoteId: string, photoId: string) => request<null>("DELETE", `/quotes/${quoteId}/photos/${photoId}`),
+
+  updateClient: (id: string, update: { name?: string; email?: string; phone?: string; address?: string }) =>
+    request<Client>("PATCH", `/clients/${id}`, update),
+
+  // Page client, sans connexion : l'accès se fait par le secret du lien.
+  openPublicQuote: (token: string) => request<QuoteDocument>("GET", `/public/quotes/${token}`),
+  acceptQuote: (token: string, name: string, message: string) =>
+    request<QuoteDocument>("POST", `/public/quotes/${token}/accept`, message ? { name, message } : { name }),
+  declineQuote: (token: string, message: string) =>
+    request<QuoteDocument>("POST", `/public/quotes/${token}/decline`, message ? { message } : {}),
 };

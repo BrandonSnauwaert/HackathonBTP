@@ -33,8 +33,8 @@ export const formatToday = (date = new Date()) => capitalize(longDay.format(date
 export const formatShortDate = (iso: string) => shortDate.format(new Date(iso));
 /** « Jeudi 18:40 » */
 export const formatDayTime = (iso: string) => capitalize(dayTime.format(new Date(iso)));
-/** « 22 septembre 2026 » */
-export const formatFullDate = (iso: string) => fullDate.format(new Date(iso));
+/** « 22 septembre 2026 » ; accepte une date ISO complète ou AAAA-MM-JJ. */
+export const formatFullDate = (iso: string) => fullDate.format(new Date(iso.length === 10 ? `${iso}T12:00:00` : iso));
 /** Chronomètre « 01:05 » */
 export const formatClock = (ms: number) => {
   const seconds = Math.floor(ms / 1000);

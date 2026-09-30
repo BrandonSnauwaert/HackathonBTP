@@ -76,6 +76,11 @@ export function SendScreen({ quoteId, company }: { quoteId: string; company: Com
                 </div>
               ))}
             </div>
+            {list.slice(0, 4).some((m) => !m.ok) && (
+              <button className="link small" onClick={() => navigate({ name: "profile" })}>
+                Compléter mon entreprise ›
+              </button>
+            )}
           </div>
 
           <ScheduleCard quote={quote} onSave={(update) => void run(() => api.updateQuote(quote.id, update))} />
@@ -110,6 +115,9 @@ export function SendScreen({ quoteId, company }: { quoteId: string; company: Com
             <Totals quote={quote} />
           </div>
           <SendActions quote={quote} byEmail={byEmail} run={run} />
+          <a className="btn ghost" href={`/apercu/${quote.id}`}>
+            Aperçu du document
+          </a>
         </aside>
       </div>
     </div>

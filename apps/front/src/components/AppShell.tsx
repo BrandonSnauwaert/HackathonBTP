@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Company, User } from "../api/types";
 import { initials } from "../format";
+import { useClipQueue } from "../offline/clipQueue";
 import { navigate, type Route } from "../router";
 
 export interface Session {
@@ -18,6 +19,23 @@ export function Logo({ size = 30 }: { size?: number }) {
 }
 
 /** Cadre de l'application : barre latérale sur ordinateur, plein écran sur téléphone. */
+/** Bandeau hors connexion : l'artisan sait que ses dictées sont gardées et partiront seules. */
+function OfflineBanner() {
+  const { online, clips, sending } = useClipQueue();
+  const waiting = clips.filter((c) => c.error === null).length;
+  if (online && waiting === 0) return null;
+  const count = `${waiting} dictée${waiting > 1 ? "s" : ""}`;
+  return (
+    <div className={`offline-banner ${online ? "syncing" : ""}`} role="status">
+      {online
+        ? `${sending ? "Envoi" : "Envoi en attente"} : ${count}`
+        : waiting > 0
+          ? `Hors connexion · ${count} en attente, envoi automatique au retour du réseau`
+          : "Hors connexion · vos dictées sont gardées sur le téléphone"}
+    </div>
+  );
+}
+
 export function AppShell({ session, route, children }: { session: Session; route: Route; children: ReactNode }) {
   const companyName = session.company?.name || session.user.email;
   return (
@@ -30,6 +48,9 @@ export function AppShell({ session, route, children }: { session: Session; route
         <button className={`nav ${route.name === "home" ? "on" : ""}`} onClick={() => navigate({ name: "home" })}>
           Accueil
         </button>
+        <button className={`nav ${route.name === "profile" ? "on" : ""}`} onClick={() => navigate({ name: "profile" })}>
+          Mon entreprise
+        </button>
         <div className="side-user">
           <div className="ic avatar">{initials(companyName)}</div>
           <div className="side-user-text">
@@ -40,7 +61,10 @@ export function AppShell({ session, route, children }: { session: Session; route
           </div>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <OfflineBanner />
+        {children}
+      </main>
     </div>
   );
 }

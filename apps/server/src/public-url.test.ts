@@ -11,7 +11,7 @@ describe("createPublicUrlResolver", () => {
 
   it("prend l'adresse du tunnel, relue à chaque appel, sinon le front local", () => {
     const resolve = createPublicUrlResolver({ PUBLIC_BASE_URL: undefined, TUNNEL_URL_FILE: file });
-    assert.equal(resolve(), "http://localhost:5173", "pas de tunnel");
+    assert.equal(resolve(), "http://localhost:5174", "pas de tunnel");
 
     writeFileSync(file, "https://abc-def.trycloudflare.com\n");
     assert.equal(resolve(), "https://abc-def.trycloudflare.com");
@@ -20,7 +20,7 @@ describe("createPublicUrlResolver", () => {
     assert.equal(resolve(), "https://autre-adresse.trycloudflare.com", "nouveau tunnel sans redémarrage");
 
     writeFileSync(file, "n'importe quoi");
-    assert.equal(resolve(), "http://localhost:5173", "contenu invalide ignoré");
+    assert.equal(resolve(), "http://localhost:5174", "contenu invalide ignoré");
   });
 
   it("donne la priorité à PUBLIC_BASE_URL quand elle est définie", () => {

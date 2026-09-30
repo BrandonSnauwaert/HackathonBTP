@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 /** Écrans de l'application, adressés par le hash de l'URL (#/devis/…) : le bouton retour du téléphone marche. */
 export type Route =
   | { name: "home" }
+  | { name: "profile" }
   | { name: "visit"; id: string }
   | { name: "quote"; id: string }
   | { name: "send"; id: string }
@@ -10,6 +11,7 @@ export type Route =
 
 export function parseRoute(hash: string): Route {
   const [screen, id, sub] = hash.replace(/^#\/?/, "").split("/");
+  if (screen === "profil") return { name: "profile" };
   if (screen === "visite" && id) return { name: "visit", id };
   if (screen === "devis" && id) {
     if (sub === "envoi") return { name: "send", id };
@@ -23,6 +25,8 @@ export function routePath(route: Route): string {
   switch (route.name) {
     case "home":
       return "#/";
+    case "profile":
+      return "#/profil";
     case "visit":
       return `#/visite/${route.id}`;
     case "quote":

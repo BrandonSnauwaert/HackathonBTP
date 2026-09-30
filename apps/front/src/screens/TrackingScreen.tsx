@@ -6,6 +6,7 @@ import { formatCents, formatDayTime, formatShortDate } from "../format";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
 import { quoteName } from "../quotes/status";
+import { ClientCard, ClientSheet } from "./ClientSheet";
 
 const STATUS_EVENTS: Record<QuoteStatus, string> = {
   draft: "repassé en brouillon",
@@ -49,9 +50,10 @@ const ACTIONS: Partial<Record<QuoteStatus, string>> = {
 
 /** E5 — Suivi d'un devis : état, relance à faire, chronologie, réponse orale du client. */
 export function TrackingScreen({ quoteId }: { quoteId: string }) {
-  const { quote, error, run } = useQuote(quoteId);
+  const { quote, error, run, load } = useQuote(quoteId);
   const [copied, setCopied] = useState(false);
   const [resent, setResent] = useState(false);
+  const [editingClient, setEditingClient] = useState(false);
   if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
 
   const { client, response } = quote;
@@ -149,6 +151,7 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
             </div>
           </div>
         )}
+        <ClientCard quote={quote} onEdit={() => setEditingClient(true)} />
         {quote.publicUrl && (
           <div className="card pad">
             <div className="row">
@@ -183,6 +186,7 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
         </div>
       </div>
 
+      {editingClient && <ClientSheet quote={quote} onClose={() => setEditingClient(false)} onSaved={load} />}
       {quote.allowedTransitions.some((s) => ACTIONS[s]) && (
         <footer className="ft actions">
           {quote.allowedTransitions

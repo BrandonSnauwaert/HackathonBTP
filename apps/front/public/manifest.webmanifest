@@ -1,0 +1,12 @@
+{
+  "name": "Devis Vocal",
+  "short_name": "Devis Vocal",
+  "description": "Dictez vos devis sur le chantier, même sans réseau.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f7",
+  "theme_color": "#0079b8",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

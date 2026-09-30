@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Config } from "./config.js";
 
-const LOCAL_FRONT_URL = "http://localhost:5173";
+const LOCAL_FRONT_URL = "http://localhost:5174";
 
 /**
  * Adresse publique du front, utilisée dans les liens envoyés aux clients (e-mail, page du devis).

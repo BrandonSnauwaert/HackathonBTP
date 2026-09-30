@@ -5,10 +5,12 @@ import { Logo, type Session } from "../components/AppShell";
 import { StatusBadge } from "../components/Badge";
 import { formatCents, formatRelative, formatToday, initials } from "../format";
 import { FILTERS, isEditable, openQuote, quoteName, type FilterId } from "../quotes/status";
-import { errorMessage } from "../quotes/useQuote";
+import { errorMessage, isNetworkError } from "../quotes/useQuote";
+import { navigate } from "../router";
 import { NewVisitSheet } from "./NewVisitSheet";
 
 const WAITING = new Set(["sent", "viewed", "follow_up"]);
+const HOME_POLL_MS = 5000;
 
 function activity(q: QuoteSummary): string {
   if (q.status === "sent" && q.sentAt) return `Envoyé ${formatRelative(q.sentAt)}`;
@@ -22,8 +24,19 @@ export function HomeScreen({ session }: { session: Session }) {
   const [filter, setFilter] = useState<FilterId>("all");
   const [creating, setCreating] = useState(false);
 
+  // Rafraîchie régulièrement : les statuts changent quand le client ouvre ou accepte un devis.
   useEffect(() => {
-    api.listQuotes().then(setQuotes, (err: unknown) => setError(errorMessage(err)));
+    const load = () =>
+      api.listQuotes().then(
+        (list) => {
+          setQuotes(list);
+          setError(null);
+        },
+        (err: unknown) => setError((previous) => (isNetworkError(err) ? previous : errorMessage(err))),
+      );
+    void load();
+    const timer = setInterval(() => document.visibilityState === "visible" && void load(), HOME_POLL_MS);
+    return () => clearInterval(timer);
   }, []);
 
   const all = quotes ?? [];
@@ -44,7 +57,7 @@ export function HomeScreen({ session }: { session: Session }) {
             <Logo />
             <span className="b">Devis Vocal</span>
           </div>
-          <button className="ic avatar" onClick={session.logout} title="Se déconnecter">
+          <button className="ic avatar" onClick={() => navigate({ name: "profile" })} title="Mon entreprise">
             {initials(companyName)}
           </button>
         </div>
