@@ -1,6 +1,6 @@
 // Test E2E de l'application de l'artisan (apps/front) : Chrome headless piloté par le protocole DevTools,
 // micro simulé par un fichier WAV. Vérifie les parcours qui ne se testent que dans un vrai navigateur :
-// ajout et modification d'une ligne, dictée hors connexion envoyée au retour du réseau, page rouverte
+// ajout et modification d'une ligne (enregistrée d'un coup), dictée hors connexion envoyée au retour du réseau, page rouverte
 // sans réseau, aperçu de l'artisan qui ne compte pas comme une consultation, passage en « consulté »
 // sans recharger, client existant proposé dans « Nouvelle visite » (sans doublon).
 //
@@ -83,6 +83,8 @@ const setOffline = (offline) =>
 /** Ouvre une adresse et recharge : la navigation par hash seule ne relance pas l'application. */
 async function open(path) {
   await send("Page.navigate", { url: front + path });
+  // Recharger avant que la navigation ait abouti la ferait annuler (page restée sur about:blank).
+  await waitUntil(async () => (await ev("location.href")).startsWith(front), 5000, 100);
   await send("Page.reload");
   await sleep(2000);
 }
@@ -168,19 +170,32 @@ try {
     JSON.stringify(line),
   );
 
-  // 2. Modification de la désignation (vrai clavier, validée en quittant le champ)
+  // 2. Modification de plusieurs champs (vrai clavier) : rien n'est envoyé avant « Enregistrer »
   await ev(`document.querySelector(".line-main").click()`);
   await sleep(300);
   await realClick(await centerOf(".line-edit textarea"));
   await ev(`document.querySelector(".line-edit textarea").select()`);
   await send("Input.insertText", { text: "Pose d'une porte coulissante" });
+  await clickText(".line-edit .seg button", "20");
   await realClick({ x: 700, y: 40 });
   await sleep(1000);
   detail = await api(`/quotes/${quote.id}`);
   await expectThat(
-    "modification de la désignation d'une ligne",
-    detail.lines[0]?.description === "Pose d'une porte coulissante",
-    detail.lines[0]?.description,
+    "modification en cours : rien d'enregistré, ligne toujours ouverte",
+    detail.lines[0]?.description === "Pose d'une porte intérieure" &&
+      detail.lines[0]?.vatRateBp === 1000 &&
+      (await ev(`!!document.querySelector(".line.open .line-edit")`)),
+    JSON.stringify(detail.lines[0]),
+  );
+  await clickText(".line-edit button", "Enregistrer");
+  await sleep(1000);
+  detail = await api(`/quotes/${quote.id}`);
+  await expectThat(
+    "« Enregistrer » : désignation et TVA enregistrées ensemble, ligne refermée",
+    detail.lines[0]?.description === "Pose d'une porte coulissante" &&
+      detail.lines[0]?.vatRateBp === 2000 &&
+      !(await ev(`!!document.querySelector(".line-edit")`)),
+    JSON.stringify(detail.lines[0]),
   );
 
   // 3. Dictée hors connexion, gardée sur le téléphone puis envoyée au retour du réseau

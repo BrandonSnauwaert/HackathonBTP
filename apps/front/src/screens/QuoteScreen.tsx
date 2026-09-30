@@ -112,7 +112,7 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
                     line={line}
                     editable={editable}
                     vatExempt={quote.totals.vatExempt}
-                    onUpdate={(update) => void run(() => api.updateLine(quote.id, line.id, update))}
+                    onUpdate={(update) => run(() => api.updateLine(quote.id, line.id, update))}
                     onDelete={() => void run(() => api.deleteLine(quote.id, line.id))}
                   />
                 ))}

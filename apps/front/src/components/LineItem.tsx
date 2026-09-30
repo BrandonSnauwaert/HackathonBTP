@@ -1,45 +1,66 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import type { LineUpdate, QuoteLine, Unit } from "../api/types";
-import { centsToInput, formatCents, formatQuantity, formatVat, parseEuros } from "../format";
+import { centsToInput, formatCents, formatQuantity, formatVat } from "../format";
+import { buildLineUpdate } from "../quotes/lineDraft";
 import { needsReview } from "../quotes/status";
-import { UNIT_OPTIONS, VAT_RATES } from "../quotes/units";
+import { isVatRate, UNIT_OPTIONS, VAT_RATES, type VatRate } from "../quotes/units";
 import { Badge } from "./Badge";
 
 /**
  * Ligne de devis : carte sur téléphone, ligne de tableau sur ordinateur.
  * Un appui ouvre l'édition (désignation, pièce, quantité, unité, prix, TVA) ; une ligne sans prix est ouverte d'office.
+ * Les changements restent sur le téléphone jusqu'à « Enregistrer », qui les envoie en une seule requête.
  */
 export function LineItem(props: {
   line: QuoteLine;
   editable: boolean;
   vatExempt: boolean;
-  onUpdate: (update: LineUpdate) => void;
+  /** Résout à true si l'enregistrement a réussi (la ligne est alors remontée avec les nouvelles valeurs). */
+  onUpdate: (update: LineUpdate) => Promise<boolean>;
   onDelete: () => void;
 }) {
   const { line, editable } = props;
   const review = needsReview(line);
   const [open, setOpen] = useState(review && editable);
-  const [price, setPrice] = useState(centsToInput(line.unitPriceCents));
-  const [quantity, setQuantity] = useState(formatQuantity(line.quantity));
   const [description, setDescription] = useState(line.description);
   const [room, setRoom] = useState(line.room);
+  const [unit, setUnit] = useState<Unit>(line.unit);
+  const [quantity, setQuantity] = useState(formatQuantity(line.quantity));
+  const [price, setPrice] = useState(centsToInput(line.unitPriceCents));
+  const savedVat: VatRate = isVatRate(line.vatRateBp) ? line.vatRateBp : 2000;
+  const [vatRateBp, setVatRateBp] = useState(savedVat);
+  const [saving, setSaving] = useState(false);
+  const [invalid, setInvalid] = useState<string | null>(null);
 
-  const commitText = (field: "description" | "room", value: string) => {
-    const trimmed = value.trim();
-    if (field === "description" && trimmed === "") return setDescription(line.description);
-    if (trimmed !== line[field]) props.onUpdate({ [field]: trimmed });
+  const draft = buildLineUpdate(line, { description, room, unit, quantity, price, vatRateBp });
+  const dirty = draft.ok && Object.keys(draft.update).length > 0;
+  const changed = !draft.ok || dirty;
+  const unitLabel = unit === line.unit ? line.unitLabel : (UNIT_OPTIONS.find((u) => u.value === unit)?.label ?? unit);
+
+  const reset = () => {
+    setDescription(line.description);
+    setRoom(line.room);
+    setUnit(line.unit);
+    setQuantity(formatQuantity(line.quantity));
+    setPrice(centsToInput(line.unitPriceCents));
+    setVatRateBp(savedVat);
+    setInvalid(null);
   };
 
-  const commitPrice = () => {
-    const cents = parseEuros(price);
-    if (cents === undefined) return setPrice(centsToInput(line.unitPriceCents));
-    if (cents !== line.unitPriceCents) props.onUpdate({ unitPriceCents: cents });
+  const save = async () => {
+    if (!draft.ok) return setInvalid(draft.error);
+    if (!dirty || saving) return;
+    setInvalid(null);
+    setSaving(true);
+    // En cas de succès, la ligne est remontée (nouvelle clé) : pas d'état à remettre.
+    if (!(await props.onUpdate(draft.update))) setSaving(false);
   };
 
-  const commitQuantity = () => {
-    const value = Number(quantity.replace(/\s/g, "").replace(",", "."));
-    if (!Number.isFinite(value) || value <= 0) return setQuantity(formatQuantity(line.quantity));
-    if (value !== line.quantity) props.onUpdate({ quantity: value });
+  const submitOnEnter = (e: KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void save();
+    }
   };
 
   const badge = review ? (
@@ -55,7 +76,8 @@ export function LineItem(props: {
       <button
         type="button"
         className="line-main"
-        onClick={() => editable && setOpen((o) => !o)}
+        // Une ligne modifiée ne se referme pas : il faut enregistrer ou annuler.
+        onClick={() => editable && !(open && changed) && setOpen((o) => !o)}
         aria-expanded={open}
         disabled={!editable}
       >
@@ -76,12 +98,7 @@ export function LineItem(props: {
         <div className="line-edit">
           <label className="field wide">
             <span>Désignation</span>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => commitText("description", description)}
-            />
+            <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
           <label className="field">
             <span>Pièce</span>
@@ -89,13 +106,12 @@ export function LineItem(props: {
               value={room}
               placeholder="Général"
               onChange={(e) => setRoom(e.target.value)}
-              onBlur={() => commitText("room", room)}
-              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              onKeyDown={submitOnEnter}
             />
           </label>
           <label className="field">
             <span>Unité</span>
-            <select value={line.unit} onChange={(e) => props.onUpdate({ unit: e.target.value as Unit })}>
+            <select value={unit} onChange={(e) => setUnit(e.target.value as Unit)}>
               {UNIT_OPTIONS.map((u) => (
                 <option key={u.value} value={u.value}>
                   {u.label}
@@ -104,13 +120,12 @@ export function LineItem(props: {
             </select>
           </label>
           <label className="field">
-            <span>Quantité ({line.unitLabel})</span>
+            <span>Quantité ({unitLabel})</span>
             <input
               inputMode="decimal"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              onBlur={commitQuantity}
-              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              onKeyDown={submitOnEnter}
             />
           </label>
           <label className="field">
@@ -121,8 +136,7 @@ export function LineItem(props: {
               placeholder="à renseigner"
               autoFocus={review}
               onChange={(e) => setPrice(e.target.value)}
-              onBlur={commitPrice}
-              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              onKeyDown={submitOnEnter}
             />
           </label>
           {!props.vatExempt && (
@@ -133,8 +147,8 @@ export function LineItem(props: {
                   <button
                     key={bp}
                     type="button"
-                    className={bp === line.vatRateBp ? "on" : ""}
-                    onClick={() => bp !== line.vatRateBp && props.onUpdate({ vatRateBp: bp })}
+                    className={bp === vatRateBp ? "on" : ""}
+                    onClick={() => setVatRateBp(bp)}
                   >
                     {formatVat(bp)}
                   </button>
@@ -142,7 +156,29 @@ export function LineItem(props: {
               </div>
             </div>
           )}
-          <button type="button" className="btn ghost danger" onClick={props.onDelete}>
+          {invalid && <p className="error-text">{invalid}</p>}
+          <div className="btns line-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                reset();
+                if (!review) setOpen(false);
+              }}
+              disabled={saving}
+            >
+              {changed ? "Annuler" : "Fermer"}
+            </button>
+            <button
+              type="button"
+              className={`btn ${dirty ? "pri" : "dis"}`}
+              onClick={() => void save()}
+              disabled={!changed || saving}
+            >
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </div>
+          <button type="button" className="btn ghost danger" onClick={props.onDelete} disabled={saving}>
             Supprimer la ligne
           </button>
         </div>
