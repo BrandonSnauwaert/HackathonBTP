@@ -32,8 +32,8 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     profiles: ["tunnel"]
-    # Host réécrit en localhost:5173 : Vite accepte la requête comme si elle venait du PC.
-    command: tunnel --no-autoupdate --url http://host.docker.internal:5173 --http-host-header localhost:5173
+    # Host réécrit en localhost:5174 : Vite accepte la requête comme si elle venait du PC.
+    command: tunnel --no-autoupdate --url http://host.docker.internal:5174 --http-host-header localhost:5174
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

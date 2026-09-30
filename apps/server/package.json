@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint",
-    "openapi": "tsx scripts/export-openapi.ts && cd ../web && npm run api:types",
+    "openapi": "tsx scripts/export-openapi.ts && cd ../web && npm run api:types && cd ../front && npm run api:types",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && tsx scripts/export-openapi.ts --check",
     "prepare": "git config core.hooksPath .githooks || exit 0",
     "tunnel": "tsx scripts/tunnel.ts"

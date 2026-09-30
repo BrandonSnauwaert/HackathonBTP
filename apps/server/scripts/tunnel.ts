@@ -25,7 +25,7 @@ function compose(...args: string[]): string {
 if (process.argv.includes("stop")) {
   compose("--profile", "tunnel", "stop", "tunnel");
   rmSync(config.TUNNEL_URL_FILE, { force: true });
-  console.log("Tunnel fermé. Les liens envoyés aux clients repointent sur http://localhost:5173.");
+  console.log("Tunnel fermé. Les liens envoyés aux clients repointent sur http://localhost:5174.");
   process.exit(0);
 }
 
