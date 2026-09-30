@@ -30,10 +30,17 @@ const sampleWav = readFileSync(new URL("../samples/chantier-fr.wav", import.meta
 /**
  * Extracteur de test : échoue si `failNext`, attend `gate` s'il est posé (LLM lent), sinon délègue au mock.
  */
-const flakyExtractor: LineExtractor & { failNext: boolean; gate: Promise<void> | null } = {
+const flakyExtractor: LineExtractor & {
+  failNext: boolean;
+  gate: Promise<void> | null;
+  /** Type de chaque enregistrement reçu (dictée ou écoute passive). */
+  kinds: (string | undefined)[];
+} = {
   failNext: false,
   gate: null,
+  kinds: [],
   async extract(input) {
+    this.kinds.push(input.kind);
     if (this.gate) await this.gate;
     if (this.failNext) {
       this.failNext = false;
@@ -392,6 +399,68 @@ describe("API", () => {
       releaseLlm();
       flakyExtractor.gate = null;
     }
+  });
+
+  it("écoute passive : segment marqué comme conversation pour le LLM, fin de traitement estimée", async () => {
+    const api = await signUp("passive@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const clip = async (id: string) => (await api("GET", `/api/quotes/${quote.id}/clips/${id}`)).json();
+    const until = async (check: () => Promise<boolean>) => {
+      for (let i = 0; i < 100 && !(await check()); i++) await new Promise((r) => setTimeout(r, 20));
+    };
+
+    let releaseLlm = () => {};
+    flakyExtractor.gate = new Promise((resolve) => (releaseLlm = resolve));
+    flakyExtractor.kinds = [];
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/quotes/${quote.id}/clips?kind=passive`,
+        headers: { "content-type": "audio/wav" },
+        cookies: api.cookies,
+        payload: sampleWav,
+      });
+      assert.equal(res.statusCode, 202, res.body);
+      const segment = res.json();
+      assert.equal(segment.kind, "passive");
+
+      // Pendant le traitement : une fin estimée, dans le futur, aussi dans le détail du devis.
+      await until(async () => (await clip(segment.id)).status === "extracting");
+      const inProgress = await clip(segment.id);
+      assert.ok(inProgress.estimatedReadyAt, "fin estimée pendant le traitement");
+      assert.ok(Date.parse(inProgress.estimatedReadyAt) > Date.now());
+      const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+      assert.equal(detail.clips[0].estimatedReadyAt, inProgress.estimatedReadyAt);
+
+      releaseLlm();
+      flakyExtractor.gate = null;
+      await until(async () => (await clip(segment.id)).status === "done");
+      const done = await clip(segment.id);
+      assert.equal(done.status, "done");
+      assert.equal(done.estimatedReadyAt, null, "plus d'estimation une fois terminé");
+      assert.deepEqual(flakyExtractor.kinds, ["passive"], "le LLM sait qu'il lit une conversation");
+    } finally {
+      releaseLlm();
+      flakyExtractor.gate = null;
+    }
+
+    // Sans précision, c'est une dictée talkie-walkie ; un type inconnu est refusé.
+    const dictation = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: sampleWav,
+    });
+    assert.equal(dictation.json().kind, "dictation");
+    const unknown = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips?kind=film`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: sampleWav,
+    });
+    assert.equal(unknown.statusCode, 400);
   });
 
   it("gère les photos : ajout, renvoi sans doublon, fichier, légende, suppression", async () => {

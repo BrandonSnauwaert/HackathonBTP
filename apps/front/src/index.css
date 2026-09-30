@@ -782,6 +782,38 @@ a {
   height: 40px;
 }
 
+/* --- Écoute passive (E2) */
+
+.card.passive {
+  gap: 10px;
+}
+
+.card.passive.on {
+  box-shadow: 0 0 0 2px var(--green-live);
+}
+
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 15px;
+}
+
+.consent input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--blue);
+}
+
+.eta {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
 /* --- Clients */
 
 .green-text {

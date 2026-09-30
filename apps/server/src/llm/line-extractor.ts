@@ -14,6 +14,8 @@ export interface ExtractedLine {
 
 export interface ExtractionInput {
   transcript: string;
+  /** dictation (défaut) : l'artisan dicte ; passive : conversation de la visite, enregistrée en continu. */
+  kind?: "dictation" | "passive";
   /** Lignes déjà présentes dans le devis, pour éviter les doublons. */
   existingLines: readonly { description: string; room: string; quantity: number; unit: Unit }[];
 }
@@ -168,6 +170,15 @@ export function buildUserPrompt(input: ExtractionInput): string {
       : input.existingLines
           .map((l) => `- ${l.room ? `[${l.room}] ` : ""}${l.description} (${l.quantity} ${l.unit})`)
           .join("\n");
+  if (input.kind === "passive") {
+    return (
+      `Lignes déjà présentes dans le devis :\n${existing}\n\n` +
+      "Attention : ce n'est pas une dictée mais un extrait de la conversation enregistrée pendant la visite " +
+      "(l'artisan et son client, voix non distinguées). N'extrais que les travaux que l'artisan prévoit de " +
+      "réaliser ; ignore les idées écartées, les hésitations et le reste de la conversation.\n\n" +
+      `Transcription de l'extrait :\n"""\n${input.transcript}\n"""`
+    );
+  }
   return `Lignes déjà présentes dans le devis :\n${existing}\n\nTranscription de la dictée :\n"""\n${input.transcript}\n"""`;
 }
 

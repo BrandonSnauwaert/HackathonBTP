@@ -113,6 +113,15 @@ describe("file des dictées hors connexion", () => {
     await vi.waitFor(() => expect(queue.queueState().clips).toEqual([]));
   });
 
+  it("transmet le type d'enregistrement : segment d'écoute passive, dictée par défaut", async () => {
+    uploadClip.mockResolvedValue({});
+    await queue.enqueueClip({ ...clip("q1", "2026-09-30T10:00:00Z"), kind: "passive" });
+    await settled();
+    await queue.enqueueClip(clip("q1", "2026-09-30T10:05:00Z"));
+    await settled();
+    expect(uploadClip.mock.calls.map((call) => call[4])).toEqual(["passive", "dictation"]);
+  });
+
   it("retrouve les dictées en attente après un redémarrage de l'application", async () => {
     uploadClip.mockRejectedValue(offline());
     await queue.enqueueClip(clip("q1", "2026-09-30T10:00:00Z"));

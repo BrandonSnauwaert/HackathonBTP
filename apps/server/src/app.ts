@@ -30,6 +30,7 @@ import { clientRoutes } from "./routes/clients.js";
 import { companyRoutes } from "./routes/company.js";
 import { quoteRoutes } from "./routes/quotes.js";
 import { transcriptionRoutes } from "./routes/transcription.js";
+import { createClipEstimator } from "./services/clip-estimates.js";
 import { createClipService } from "./services/clip-service.js";
 import { createPhotoService } from "./services/photo-service.js";
 import { createQuoteService } from "./services/quote-service.js";
@@ -149,7 +150,13 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
   );
 
   const publicUrl = createPublicUrlResolver(config);
+  const estimateClips = createClipEstimator(db, {
+    sttSpeedFactor: config.STT_SPEED_FACTOR ?? (config.TRANSCRIBER === "kyutai" ? 1.15 : 0.05),
+    llmBaseMs: config.LLM_ESTIMATE_BASE_SECONDS * 1000,
+    llmMsPerAudioMinute: config.LLM_ESTIMATE_SECONDS_PER_AUDIO_MINUTE * 1000,
+  });
   const quotes = createQuoteService(db, {
+    estimateClips,
     followUpAfterDays: config.FOLLOW_UP_AFTER_DAYS,
     clipsDir: config.CLIPS_DIR,
     photosDir: config.PHOTOS_DIR,
@@ -164,6 +171,7 @@ export async function buildApp({ config, db, logger = true, extractor, mailer }:
     createTranscriber: () => createTranscriber(config, app.log),
     extractor: extractor ?? createLineExtractor(config),
     logger: app.log,
+    estimateClips,
   });
   app.addHook("onReady", async () => clips.resume());
   await app.register(authRoutes, {

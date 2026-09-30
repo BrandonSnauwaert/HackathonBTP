@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import { QUOTE_STATUSES } from "../domain/quote-status.js";
-import { CLIP_STATUSES } from "../repositories/clips.js";
+import { CLIP_KINDS, CLIP_STATUSES } from "../repositories/clips.js";
 import { VAT_RATES_BP } from "../domain/quote-totals.js";
 import { UNITS } from "../domain/units.js";
 
@@ -139,6 +139,7 @@ export const ClipSchema = z
   .object({
     id: z.uuid(),
     clientClipId: z.string().nullable().describe("Identifiant généré par le téléphone"),
+    kind: z.enum(CLIP_KINDS).describe("dictation = talkie-walkie, passive = segment d'une écoute passive"),
     status: z.enum(CLIP_STATUSES).describe("pending → transcribing → transcribed → extracting → done, ou failed"),
     statusLabel: z.string(),
     durationMs: z.number().int(),
@@ -146,6 +147,9 @@ export const ClipSchema = z
     warnings: z.array(z.string()).describe("Informations manquantes relevées par l'analyse (quantités, dimensions...)"),
     error: z.string().nullable().describe("Cause de l'échec, si status = failed"),
     lineCount: z.number().int().describe("Nombre de lignes ajoutées au devis par cette dictée"),
+    estimatedReadyAt: isoDate
+      .nullable()
+      .describe("Fin de traitement estimée (file de transcription puis analyse) ; null une fois terminé"),
     recordedAt: isoDate,
     createdAt: isoDate,
     updatedAt: isoDate,

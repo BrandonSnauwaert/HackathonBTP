@@ -2,6 +2,7 @@ import type {
   ApiErrorBody,
   Client,
   Clip,
+  ClipKind,
   Company,
   LineCreate,
   LineUpdate,
@@ -92,10 +93,11 @@ export const api = {
     request<QuoteDetail>("PATCH", `/quotes/${quoteId}/lines/${lineId}`, update),
   deleteLine: (quoteId: string, lineId: string) => request<QuoteDetail>("DELETE", `/quotes/${quoteId}/lines/${lineId}`),
 
-  uploadClip: (quoteId: string, wav: Blob, clientClipId: string, recordedAt: Date) =>
+  /** kind : dictée talkie-walkie (défaut) ou segment d'écoute passive. */
+  uploadClip: (quoteId: string, wav: Blob, clientClipId: string, recordedAt: Date, kind: ClipKind = "dictation") =>
     request<Clip>(
       "POST",
-      `/quotes/${quoteId}/clips?clientClipId=${clientClipId}&recordedAt=${encodeURIComponent(recordedAt.toISOString())}`,
+      `/quotes/${quoteId}/clips?clientClipId=${clientClipId}&recordedAt=${encodeURIComponent(recordedAt.toISOString())}&kind=${kind}`,
       wav,
     ),
   retryClip: (quoteId: string, clipId: string) => request<Clip>("POST", `/quotes/${quoteId}/clips/${clipId}/retry`),

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "../api/client";
+import type { ClipKind } from "../api/types";
 
 /**
  * File d'attente des dictées, pour travailler sans réseau (caves, sous-sols, zones blanches).
@@ -16,6 +17,8 @@ export interface QueuedClip {
   wav: Blob;
   durationMs: number;
   recordedAt: Date;
+  /** Absent pour les dictées enregistrées avant l'écoute passive : dictée talkie-walkie. */
+  kind?: ClipKind;
   /** Refus du serveur (pas une coupure réseau) : la dictée attend un renvoi manuel. */
   error: string | null;
 }
@@ -78,7 +81,7 @@ async function syncOnce(): Promise<void> {
     for (const clip of state.clips.filter((c) => c.error === null)) {
       setState({ sending: clip.clientClipId });
       try {
-        await api.uploadClip(clip.quoteId, clip.wav, clip.clientClipId, clip.recordedAt);
+        await api.uploadClip(clip.quoteId, clip.wav, clip.clientClipId, clip.recordedAt, clip.kind ?? "dictation");
         await tx("readwrite", (store) => store.delete(clip.clientClipId));
         setState({ online: true });
         notifySent(clip.quoteId);

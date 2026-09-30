@@ -1,6 +1,12 @@
 import type { Clip } from "../api/types";
 import type { Upload } from "../quotes/useQuote";
 import { isProcessing } from "../quotes/useQuote";
+import { formatRemaining } from "../quotes/eta";
+import { formatClock } from "../format";
+
+/** « Dictée » ou « Écoute passive (4:30) » : un segment d'écoute est bien plus long à traiter. */
+const clipName = (clip: Clip) =>
+  clip.kind === "passive" ? `Écoute passive (${formatClock(clip.durationMs)})` : "Dictée";
 
 /** Dictées pas encore transformées en lignes : en attente du réseau, envoi, traitement, échecs (avec relance). */
 export function ClipCards(props: {
@@ -35,7 +41,10 @@ export function ClipCards(props: {
       )}
       {props.clips.filter(isProcessing).map((clip) => (
         <div key={clip.id} className="card dash pulse">
-          {clip.statusLabel}…
+          <span>
+            {clipName(clip)} · {clip.statusLabel.toLowerCase()}…
+          </span>
+          {clip.estimatedReadyAt && <span className="small">Prêt dans {formatRemaining(clip.estimatedReadyAt)}</span>}
         </div>
       ))}
       {props.clips
@@ -43,7 +52,7 @@ export function ClipCards(props: {
         .map((clip) => (
           <div key={clip.id} className="card w">
             <div className="row">
-              <span className="b">Dictée non comprise</span>
+              <span className="b">{clipName(clip)} non comprise</span>
               <button className="btn ghost" onClick={() => props.onRetry(clip.id)}>
                 Relancer
               </button>
