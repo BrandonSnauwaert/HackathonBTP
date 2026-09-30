@@ -2,7 +2,7 @@ import type { Clip } from "../api/types";
 import type { Upload } from "../quotes/useQuote";
 import { isProcessing } from "../quotes/useQuote";
 
-/** Dictées pas encore transformées en lignes : envoi, traitement, échecs (avec relance). */
+/** Dictées pas encore transformées en lignes : en attente du réseau, envoi, traitement, échecs (avec relance). */
 export function ClipCards(props: {
   clips: Clip[];
   uploads: Upload[];
@@ -22,8 +22,13 @@ export function ClipCards(props: {
             </div>
             <span className="small">{upload.error}</span>
           </div>
+        ) : upload.waiting ? (
+          <div key={upload.clientClipId} className="card dash queued">
+            <span className="b">Dictée enregistrée sur le téléphone</span>
+            <span className="small">Envoi automatique au retour du réseau.</span>
+          </div>
         ) : (
-          <div key={upload.clientClipId} className="card dash">
+          <div key={upload.clientClipId} className="card dash pulse">
             Envoi de la dictée…
           </div>
         ),

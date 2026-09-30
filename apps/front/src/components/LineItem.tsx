@@ -1,20 +1,13 @@
 import { useState } from "react";
-import type { QuoteLine } from "../api/types";
+import type { LineUpdate, QuoteLine, Unit } from "../api/types";
 import { centsToInput, formatCents, formatQuantity, formatVat, parseEuros } from "../format";
 import { needsReview } from "../quotes/status";
+import { UNIT_OPTIONS, VAT_RATES } from "../quotes/units";
 import { Badge } from "./Badge";
-
-const VAT_RATES = [2000, 1000, 550, 0];
-
-export interface LineUpdate {
-  quantity?: number;
-  unitPriceCents?: number | null;
-  vatRateBp?: number;
-}
 
 /**
  * Ligne de devis : carte sur téléphone, ligne de tableau sur ordinateur.
- * Un appui ouvre l'édition (quantité, prix, TVA) ; une ligne sans prix est ouverte d'office.
+ * Un appui ouvre l'édition (désignation, pièce, quantité, unité, prix, TVA) ; une ligne sans prix est ouverte d'office.
  */
 export function LineItem(props: {
   line: QuoteLine;
@@ -28,6 +21,14 @@ export function LineItem(props: {
   const [open, setOpen] = useState(review && editable);
   const [price, setPrice] = useState(centsToInput(line.unitPriceCents));
   const [quantity, setQuantity] = useState(formatQuantity(line.quantity));
+  const [description, setDescription] = useState(line.description);
+  const [room, setRoom] = useState(line.room);
+
+  const commitText = (field: "description" | "room", value: string) => {
+    const trimmed = value.trim();
+    if (field === "description" && trimmed === "") return setDescription(line.description);
+    if (trimmed !== line[field]) props.onUpdate({ [field]: trimmed });
+  };
 
   const commitPrice = () => {
     const cents = parseEuros(price);
@@ -73,6 +74,35 @@ export function LineItem(props: {
 
       {open && editable && (
         <div className="line-edit">
+          <label className="field wide">
+            <span>Désignation</span>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => commitText("description", description)}
+            />
+          </label>
+          <label className="field">
+            <span>Pièce</span>
+            <input
+              value={room}
+              placeholder="Général"
+              onChange={(e) => setRoom(e.target.value)}
+              onBlur={() => commitText("room", room)}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            />
+          </label>
+          <label className="field">
+            <span>Unité</span>
+            <select value={line.unit} onChange={(e) => props.onUpdate({ unit: e.target.value as Unit })}>
+              {UNIT_OPTIONS.map((u) => (
+                <option key={u.value} value={u.value}>
+                  {u.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="field">
             <span>Quantité ({line.unitLabel})</span>
             <input

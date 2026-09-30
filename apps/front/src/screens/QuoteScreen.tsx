@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { api } from "../api/client";
 import { useClipRecorder } from "../audio/useClipRecorder";
 import { StatusBadge } from "../components/Badge";
@@ -10,11 +11,14 @@ import { formatCents } from "../format";
 import { groupByRoom, isEditable, needsReview } from "../quotes/status";
 import { useQuote } from "../quotes/useQuote";
 import { navigate } from "../router";
+import { ClientCard, ClientSheet } from "./ClientSheet";
+import { NewLineSheet } from "./NewLineSheet";
 
 /** E3 — Devis : lignes regroupées par pièce, prix et TVA à compléter, dictée d'une modification. */
 export function QuoteScreen({ quoteId }: { quoteId: string }) {
   const { quote, error, uploads, load, run, send, addClip, retryClip } = useQuote(quoteId);
   const recorder = useClipRecorder();
+  const [sheet, setSheet] = useState<"line" | "client" | null>(null);
 
   if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
 
@@ -63,6 +67,7 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
       <div className="quote-layout">
         <div className="bd">
           {error && <p className="error-text">{error}</p>}
+          <ClientCard quote={quote} onEdit={() => setSheet("client")} />
           {!editable && (
             <button className="card flat action" onClick={() => navigate({ name: "tracking", id: quote.id })}>
               <span className="grow">Ce devis a été envoyé : il n'est plus modifiable.</span>
@@ -119,6 +124,17 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
             <div className="card dash">Aucune ligne : maintenez le bouton pour dicter les travaux.</div>
           )}
 
+          <div className="btns">
+            {editable && (
+              <button className="btn ghost" onClick={() => setSheet("line")}>
+                + Ajouter une ligne
+              </button>
+            )}
+            <a className="btn ghost" href={`/apercu/${quote.id}`}>
+              Aperçu du document
+            </a>
+          </div>
+
           <section className="photos-block">
             <div className="row">
               <h2 className="b">
@@ -161,6 +177,16 @@ export function QuoteScreen({ quoteId }: { quoteId: string }) {
         {recorder.error && <p className="error-text">{recorder.error}</p>}
         {sendButton}
       </footer>
+
+      {sheet === "line" && (
+        <NewLineSheet
+          quote={quote}
+          rooms={groupByRoom(quote.lines).map((g) => g.room)}
+          onClose={() => setSheet(null)}
+          run={run}
+        />
+      )}
+      {sheet === "client" && <ClientSheet quote={quote} onClose={() => setSheet(null)} onSaved={load} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useClipRecorder } from "../audio/useClipRecorder";
+import { useWakeLock } from "../audio/useWakeLock";
 import { Badge } from "../components/Badge";
 import { ClipCards } from "../components/ClipCards";
 import { LevelBars } from "../components/LevelBars";
@@ -30,10 +31,12 @@ function useRecordingClock(recording: boolean) {
  * les lignes comprises s'affichent au fil des dictées.
  */
 export function VisitScreen({ quoteId }: { quoteId: string }) {
-  const { quote, error, uploads, processing, load, send, addClip, retryClip } = useQuote(quoteId);
+  const { quote, error, uploads, online, processing, load, send, addClip, retryClip } = useQuote(quoteId);
   const recorder = useClipRecorder();
   const recording = recorder.state === "recording";
   const elapsed = useRecordingClock(recording);
+  // Pendant toute la visite : l'artisan pose souvent le téléphone entre deux dictées.
+  useWakeLock(true);
 
   if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
 
@@ -42,7 +45,16 @@ export function VisitScreen({ quoteId }: { quoteId: string }) {
   const dictatedMs = quote.clips.reduce((sum, clip) => sum + clip.durationMs, 0);
   const transcripts = quote.clips.filter((clip) => clip.transcript);
   const lastTranscript = transcripts.at(-1);
-  const pillLabel = recording ? "J'enregistre" : processing || uploads.length > 0 ? "J'analyse…" : "Prêt";
+  const waiting = uploads.filter((u) => u.waiting).length;
+  const pillLabel = recording
+    ? "J'enregistre"
+    : waiting > 0
+      ? `${waiting} en attente`
+      : processing || uploads.length > 0
+        ? "J'analyse…"
+        : online
+          ? "Prêt"
+          : "Hors connexion";
 
   return (
     <div className="screen visit">

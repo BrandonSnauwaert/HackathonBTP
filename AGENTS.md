@@ -29,9 +29,12 @@ apps/server/            API Node.js (Fastify, TypeScript)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
   openapi.json          doc OpenAPI exportée (générée : npm run openapi)
 apps/front/             application de l'artisan (React, Vite), d'après la maquette « Devis Vocal » (claude.ai/design)
-  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), connexion
-  src/components/       cadre (barre latérale sur ordinateur), badges, bouton talkie-walkie, ligne de devis, totaux
-  src/quotes/           useQuote (chargement, modifications, dictées), statuts, regroupement des lignes par pièce
+  src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), mon entreprise, connexion ; fiches (client, nouvelle ligne)
+  src/components/       cadre (barre latérale sur ordinateur, bandeau hors connexion), badges, bouton talkie-walkie, ligne de devis, totaux
+  src/quotes/           useQuote (chargement, modifications, dictées, rafraîchissement, cache hors connexion), statuts, unités
+  src/offline/          file des dictées hors connexion (IndexedDB), envoi au retour du réseau
+  src/public-quote/     page client (E6, /d/<secret>) et aperçu artisan (/apercu/<id>)
+  public/sw.js          service worker : l'application s'ouvre sans réseau (réseau d'abord, cache en secours)
   src/router.ts         navigation par hash (#/devis/:id…), sans dépendance
   src/api, src/audio, src/images   repris de apps/web (schema.d.ts généré de la même façon)
 apps/web/               PWA React (Vite, TypeScript) — pages de test de l'API
@@ -53,7 +56,7 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Transcription en streaming de bout en bout : front → WebSocket → Kyutai (GPU local) → phrases définitives affichées
 - [x] Mock de transcription (`TRANSCRIBER=mock`) pour travailler sans GPU
 - [ ] Passage en **talkie-walkie** : clips audio au lieu du flux continu (le flux reste possible en aperçu quand le réseau est là)
-- [ ] File d'attente **hors connexion** : clips stockés dans IndexedDB, synchronisés au retour du réseau. Service worker et manifest PWA.
+- [x] File d'attente **hors connexion** (`apps/front`) : clips stockés dans IndexedDB, synchronisés au retour du réseau. Service worker, manifest PWA, session et dernier état des devis gardés sur le téléphone, écran maintenu allumé pendant la visite.
 - [x] SQLite : artisans, profil entreprise, clients, devis, lignes, historique
 - [x] Authentification (e-mail + mot de passe, session par cookie) et compte de démo pré-rempli (`npm run seed:demo`)
 - [x] API REST des devis : CRUD, lignes, statuts, calcul HT / TVA / TTC, points manquants, doc OpenAPI sur `/docs`
@@ -66,9 +69,8 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [ ] Brancher le vrai LLM (variables `LLM_*`) et ajuster le prompt sur de vraies dictées
 - [x] Page de test (`apps/web`, onglet « Devis & dictées ») : connexion, devis, dictée talkie-walkie, prix et TVA des lignes
 - [x] Front définitif (`apps/front`, maquette « Devis Vocal ») : accueil, visite en talkie-walkie, devis (prix, quantité, TVA), envoi (mentions, e-mail ou lien seul), suivi (ouverture, réponse du client, lien, renvoi de l'e-mail, relance, accepté / refusé). Mobile et ordinateur.
-- [ ] Front : page client (E6) au style de la maquette (pour l'instant celle de `apps/web`), file hors connexion, thème sombre
-- [ ] Page publique du devis (lien secret) avec « Accepter » et « Refuser », suivi de consultation, pixel
-- [ ] Envoi de l'e-mail (service à choisir) et tunnel HTTPS vers le PC de démo
+- [x] Front : page client (E6) au style de la maquette et aperçu du document, ajout et modification complète des lignes, fiche client modifiable, suivi et accueil rafraîchis tout seuls, profil entreprise (« Mon entreprise »). `PUBLIC_BASE_URL` pointe désormais sur `apps/front` (5174).
+- [x] Front : thème sombre (suit le téléphone, ou forcé dans « Mon entreprise » ; la page client reste en clair)
 - [ ] Bonus : PDF conforme, photos, relances automatiques
 
 Tenir cette liste à jour quand une étape est terminée.

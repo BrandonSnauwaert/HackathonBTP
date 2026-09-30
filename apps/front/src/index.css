@@ -25,8 +25,14 @@
   --surface-3: #fafbfb;
   --bg: #f5f6f7;
   --danger: #b3261e;
+  /* Texte posé sur un fond --ink (avatar, filtre actif...), sur le jaune, et texte d'avertissement. */
+  --on-ink: #fff;
+  --on-yellow: #16181b;
+  --warn-ink: #7a6300;
   --radius: 16px;
   --shadow-ft: 0 -1px 0 var(--line), 0 -8px 24px rgba(20, 24, 30, 0.06);
+
+  color-scheme: light;
 
   font-family: "Figtree", system-ui, sans-serif;
   font-size: 17px;
@@ -36,6 +42,66 @@
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Thème sombre : selon le réglage du téléphone, sauf choix contraire de l'artisan (data-theme sur <html>).
+ * Même palette, fonds et textes inversés ; le bleu est éclairci pour rester lisible sur fond sombre.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --blue: #1e8ad0;
+    --blue-dark: #8fcaf0;
+    --blue-soft: #133349;
+    --green: #2e9c38;
+    --green-dark: #86dc90;
+    --green-soft: #15311b;
+    --yellow-soft: #2c2710;
+    --ink: #eceef0;
+    --ink-2: #c9ccd0;
+    --grey-text: #b3b6ba;
+    --muted: #9a9da1;
+    --line: #2b2e32;
+    --line-2: #3b3f44;
+    --dash: #4a4e53;
+    --surface: #1b1d20;
+    --surface-2: #26292d;
+    --surface-3: #202326;
+    --bg: #111315;
+    --danger: #f2766b;
+    --on-ink: #16181b;
+    --warn-ink: #f3d54e;
+    --shadow-ft: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.4);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --blue: #1e8ad0;
+  --blue-dark: #8fcaf0;
+  --blue-soft: #133349;
+  --green: #2e9c38;
+  --green-dark: #86dc90;
+  --green-soft: #15311b;
+  --yellow-soft: #2c2710;
+  --ink: #eceef0;
+  --ink-2: #c9ccd0;
+  --grey-text: #b3b6ba;
+  --muted: #9a9da1;
+  --line: #2b2e32;
+  --line-2: #3b3f44;
+  --dash: #4a4e53;
+  --surface: #1b1d20;
+  --surface-2: #26292d;
+  --surface-3: #202326;
+  --bg: #111315;
+  --danger: #f2766b;
+  --on-ink: #16181b;
+  --warn-ink: #f3d54e;
+  --shadow-ft: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
 }
 
 * {
@@ -56,7 +122,8 @@ p {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -136,7 +203,7 @@ a {
 }
 
 .warn-text {
-  color: #7a6300;
+  color: var(--warn-ink);
 }
 
 .error-text {
@@ -321,12 +388,13 @@ a {
   height: 36px;
   border-radius: 50%;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 14px;
 }
 
 .ic.yellow {
   background: var(--yellow);
+  color: var(--on-yellow);
 }
 
 .ic.green {
@@ -432,7 +500,7 @@ a {
 
 .btn.talk.on {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   box-shadow: 0 0 0 4px rgba(63, 210, 75, 0.35);
 }
 
@@ -470,7 +538,7 @@ a {
 
 .bdg.w {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-yellow);
 }
 
 .bdg.bl {
@@ -492,7 +560,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--ink);
+  background: #16181b;
   color: #fff;
   border-radius: 999px;
   padding: 6px 14px 6px 12px;
@@ -553,7 +621,7 @@ a {
 
 .chip.on {
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   box-shadow: none;
 }
 
@@ -599,7 +667,9 @@ a {
   color: var(--grey-text);
 }
 
-.field input {
+.field input,
+.field textarea,
+.field select {
   min-height: 50px;
   border-radius: 12px;
   border: 0;
@@ -610,7 +680,23 @@ a {
   width: 100%;
 }
 
-.field input:focus {
+.field textarea {
+  padding: 13px 14px;
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.field select {
+  appearance: none;
+  background: var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236d6f72' stroke-width='2'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
+  padding-right: 36px;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--blue);
 }
@@ -623,6 +709,58 @@ a {
   display: flex;
   gap: 10px;
   flex-direction: row;
+}
+
+.field-row.wrap {
+  flex-wrap: wrap;
+}
+
+.field-row.wrap > .field {
+  flex-basis: 220px;
+}
+
+/* --- Hors connexion */
+
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.offline-banner.syncing {
+  background: var(--blue);
+}
+
+.card.queued {
+  color: var(--ink-2);
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+/* --- Client et chantier (E3, E5) */
+
+.client-card .row {
+  align-items: flex-start;
+}
+
+.client-card .mut {
+  overflow-wrap: anywhere;
+}
+
+/* --- Mon entreprise */
+
+.profile-body > .card.pad h2 {
+  font-size: 18px;
+}
+
+.profile-body > .card.row {
+  align-items: center;
 }
 
 .login {
@@ -986,7 +1124,7 @@ a {
 
 .ck b.no {
   background: var(--yellow);
-  color: var(--ink);
+  color: var(--on-yellow);
 }
 
 /* --- E5 Suivi */
@@ -1099,6 +1237,19 @@ a {
 
   .ft {
     padding: 16px 40px 22px;
+  }
+
+  .profile-body {
+    max-width: 760px;
+  }
+
+  .profile-ft {
+    align-items: flex-start;
+  }
+
+  .profile-ft .btn {
+    flex: none;
+    padding: 0 30px;
   }
 
   .btn.pri.only-desktop {
@@ -1343,8 +1494,13 @@ a {
 
   .line-edit {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-end;
     padding: 12px 14px;
+  }
+
+  .line-edit .field.wide {
+    flex: 1 1 100%;
   }
 
   .line-edit .field {
@@ -1381,10 +1537,28 @@ a {
     grid-template-columns: 1fr 1fr;
     gap: 28px;
     align-items: start;
+    align-content: start;
   }
 
   .ft.actions {
     justify-content: flex-start;
     gap: 16px;
+  }
+}
+
+/* Ordinateur portable : la colonne des badges passe sous la désignation, pour laisser la place au texte. */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .line-head,
+  .line-main {
+    grid-template-columns: minmax(0, 1fr) 64px 84px 104px;
+  }
+
+  .line-head > span:last-child {
+    display: none;
+  }
+
+  .line-main .l-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
