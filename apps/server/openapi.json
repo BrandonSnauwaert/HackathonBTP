@@ -841,6 +841,14 @@
             "description": "Identifiant généré par le téléphone",
             "type": "string"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dictation",
+              "passive"
+            ],
+            "description": "dictation = talkie-walkie, passive = segment d'une écoute passive"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -884,6 +892,11 @@
             "maximum": 9007199254740991,
             "description": "Nombre de lignes ajoutées au devis par cette dictée"
           },
+          "estimatedReadyAt": {
+            "nullable": true,
+            "description": "Fin de traitement estimée (file de transcription puis analyse) ; null une fois terminé",
+            "type": "string"
+          },
           "recordedAt": {
             "type": "string",
             "description": "Date ISO 8601"
@@ -900,6 +913,7 @@
         "required": [
           "id",
           "clientClipId",
+          "kind",
           "status",
           "statusLabel",
           "durationMs",
@@ -907,6 +921,7 @@
           "warnings",
           "error",
           "lineCount",
+          "estimatedReadyAt",
           "recordedAt",
           "createdAt",
           "updatedAt"
@@ -3273,11 +3288,11 @@
     },
     "/api/quotes/{id}/clips": {
       "post": {
-        "summary": "Envoyer une dictée audio (talkie-walkie)",
+        "summary": "Envoyer une dictée audio (talkie-walkie) ou un segment d'écoute passive",
         "tags": [
           "Dictées"
         ],
-        "description": "Corps : le fichier **WAV** brut (PCM 16 bits ou flottant 32 bits, toute fréquence), avec `Content-Type: audio/wav`. La dictée est transcrite puis analysée en tâche de fond : les lignes extraites s'ajoutent au devis. Suivre l'avancement via `GET /api/quotes/{id}` (champ `clips`) ou passer `wait=true` pour attendre le résultat.\n\nHors connexion : générer un `clientClipId` (UUID) sur le téléphone. Un renvoi du même clip renvoie le clip existant (200) au lieu d'en créer un second.",
+        "description": "Corps : le fichier **WAV** brut (PCM 16 bits ou flottant 32 bits, toute fréquence), avec `Content-Type: audio/wav`. La dictée est transcrite puis analysée en tâche de fond : les lignes extraites s'ajoutent au devis. Suivre l'avancement via `GET /api/quotes/{id}` (champ `clips`) ou passer `wait=true` pour attendre le résultat.\n\nHors connexion : générer un `clientClipId` (UUID) sur le téléphone. Un renvoi du même clip renvoie le clip existant (200) au lieu d'en créer un second.\n\nÉcoute passive : la visite est enregistrée en continu et envoyée par segments (`kind=passive`, `MAX_CLIP_SECONDS` chacun au plus). Le LLM sait alors qu'il lit une conversation. `estimatedReadyAt` donne la fin de traitement estimée.",
         "parameters": [
           {
             "schema": {
@@ -3300,6 +3315,19 @@
             "name": "recordedAt",
             "required": false,
             "description": "Date de l'enregistrement (ISO 8601)"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dictation",
+                "passive"
+              ]
+            },
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "description": "dictation (défaut) ou passive (segment d'écoute passive)"
           },
           {
             "schema": {

@@ -65,7 +65,7 @@ L'artisan **dicte** ce qu'il faut faire, directement sur le chantier, même **sa
 
 | Sujet | Décision | Pourquoi |
 |---|---|---|
-| Mode de dictée | **Talkie-walkie** : un appui produit un clip audio. Pas d'écoute continue. | Fonctionne hors connexion (un clip est un fichier mis en file d'attente) ; l'entrée envoyée au LLM est plus propre ; pas d'enregistrement de la conversation avec le client (RGPD). |
+| Mode de dictée | **Talkie-walkie** par défaut : un appui produit un clip audio. **Écoute passive en option** (révisé le 30/09/2026) : toute la visite est enregistrée, **seulement après avoir coché que le client est informé et d'accord**, et envoyée par segments de 4 min 30. L'artisan est prévenu que c'est bien plus long à traiter (≈ la durée enregistrée) et voit le temps restant estimé. | Talkie-walkie : fonctionne hors connexion (un clip est un fichier mis en file d'attente), entrée plus propre pour le LLM, pas d'enregistrement de la conversation (RGPD). Écoute passive : ajoutée à la demande de Thomas, pour les artisans qui préfèrent parler librement ; le consentement du client répond au point RGPD, le LLM est prévenu qu'il lit une conversation. **À valider par l'équipe.** |
 | Hors connexion | **Cœur du produit, montré pendant la démo.** Les clips sont stockés sur le téléphone et traités au retour du réseau. | Les chantiers sont souvent en zone blanche : caves, sous-sols, campagne. |
 | Transcription | **Kyutai STT** (`stt-1b-en_fr`), en local sur le GPU du PC de Thomas. Un mock existe pour développer sans GPU. | Bonne qualité en français, y compris le vocabulaire BTP (testé : « ragréage », « gondolée »), et gratuit. |
 | LLM | **Hébergé via une API**, pas de LLM local. | Le GPU de démo (GTX 1660, 6 Go) est déjà occupé par Kyutai. |

@@ -212,7 +212,34 @@ try {
   await expectThat("retour du réseau : la dictée arrive sur le serveur", arrived);
   await expectThat("retour du réseau : le bandeau disparaît", (await text(".offline-banner")) === "");
 
-  // 4. Aperçu de l'artisan : ne compte pas comme une consultation
+  // 4. Écoute passive : accord du client obligatoire, segment envoyé à l'arrêt, temps restant affiché
+  await clickText(".seg button", "Écoute passive");
+  await sleep(300);
+  const blockedWithoutConsent = await ev(
+    `[...document.querySelectorAll(".card.passive button")].find((b) => b.textContent.includes("Démarrer")).disabled`,
+  );
+  await ev(`document.querySelector(".consent input").click()`);
+  await clickText(".card.passive button", "Démarrer l'écoute");
+  await sleep(4000);
+  const listening = (await text(".card.passive.on")).includes("Écoute en cours");
+  await clickText(".card.passive button", "Arrêter l'écoute");
+  const etaShown = await waitUntil(async () => (await text(".eta")).includes("Tout sera prêt dans"), 8000, 250);
+  const passiveArrived = await waitUntil(
+    async () => (await api(`/quotes/${quote.id}`)).clips.some((c) => c.kind === "passive"),
+    15_000,
+  );
+  await expectThat(
+    "écoute passive : accord du client exigé, écoute démarrée puis arrêtée, segment reçu par le serveur",
+    blockedWithoutConsent === true && listening && passiveArrived,
+    `sans accord : ${blockedWithoutConsent ? "bloqué" : "possible"}, écoute : ${listening}, reçu : ${passiveArrived}`,
+  );
+  await expectThat("écoute passive : temps restant affiché pendant le traitement", etaShown, await text(".eta"));
+  await waitUntil(
+    async () => (await api(`/quotes/${quote.id}`)).clips.every((c) => c.estimatedReadyAt === null),
+    60_000,
+  );
+
+  // 5. Aperçu de l'artisan : ne compte pas comme une consultation
   await setViewport(1280, 900, false);
   await api(`/quotes/${quote.id}/status`, "POST", { status: "ready" });
   const sent = await api(`/quotes/${quote.id}/send`, "POST", { byEmail: false });
@@ -227,14 +254,14 @@ try {
     `${await ev("location.pathname")} / ${detail.status}`,
   );
 
-  // 5. Le client ouvre son lien : le suivi passe en « consulté » sans recharger
+  // 6. Le client ouvre son lien : le suivi passe en « consulté » sans recharger
   await open(`/#/devis/${quote.id}/suivi`);
   const token = sent.publicUrl.split("/d/")[1];
   await fetch(`${front}/api/public/quotes/${token}`);
   const viewed = await waitUntil(async () => (await text("header .bdg")).includes("Consulté"), 8000);
   await expectThat("suivi : « Consulté » affiché sans recharger la page", viewed, await text("header .bdg"));
 
-  // 6. Client existant proposé dans « Nouvelle visite », sans doublon
+  // 7. Client existant proposé dans « Nouvelle visite », sans doublon
   const clientsBefore = (await api("/clients")).length;
   await open("/#/");
   await clickText("button", "Nouvelle visite");

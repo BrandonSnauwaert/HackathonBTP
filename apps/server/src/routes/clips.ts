@@ -4,6 +4,7 @@ import { z } from "zod";
 import { cookieAuth, requireUser } from "../auth/session.js";
 import { ErrorResponseSchema, HttpError } from "../http/errors.js";
 import { ClipSchema, IdParams } from "../http/schemas.js";
+import { CLIP_KINDS } from "../repositories/clips.js";
 import type { ClipService } from "../services/clip-service.js";
 
 const tags = ["Dictées"];
@@ -37,18 +38,22 @@ export const clipRoutes: FastifyPluginAsyncZod<{ clips: ClipService; maxUploadBy
       schema: {
         tags,
         security,
-        summary: "Envoyer une dictée audio (talkie-walkie)",
+        summary: "Envoyer une dictée audio (talkie-walkie) ou un segment d'écoute passive",
         description:
           "Corps : le fichier **WAV** brut (PCM 16 bits ou flottant 32 bits, toute fréquence), avec " +
           "`Content-Type: audio/wav`. La dictée est transcrite puis analysée en tâche de fond : les lignes " +
           "extraites s'ajoutent au devis. Suivre l'avancement via `GET /api/quotes/{id}` (champ `clips`) " +
           "ou passer `wait=true` pour attendre le résultat.\n\n" +
           "Hors connexion : générer un `clientClipId` (UUID) sur le téléphone. Un renvoi du même clip " +
-          "renvoie le clip existant (200) au lieu d'en créer un second.",
+          "renvoie le clip existant (200) au lieu d'en créer un second.\n\n" +
+          "Écoute passive : la visite est enregistrée en continu et envoyée par segments " +
+          "(`kind=passive`, `MAX_CLIP_SECONDS` chacun au plus). Le LLM sait alors qu'il lit une conversation. " +
+          "`estimatedReadyAt` donne la fin de traitement estimée.",
         params: IdParams,
         querystring: z.object({
           clientClipId: z.uuid().optional().describe("Identifiant du clip généré par le téléphone"),
           recordedAt: z.iso.datetime({ offset: true }).optional().describe("Date de l'enregistrement (ISO 8601)"),
+          kind: z.enum(CLIP_KINDS).optional().describe("dictation (défaut) ou passive (segment d'écoute passive)"),
           wait: z.enum(["true", "false"]).optional().describe("true = attendre la fin du traitement (2 min max)"),
         }),
         response: {
@@ -64,8 +69,8 @@ export const clipRoutes: FastifyPluginAsyncZod<{ clips: ClipService; maxUploadBy
         throw new HttpError(400, "invalid_audio", "Corps attendu : un fichier WAV (Content-Type: audio/wav)");
       }
       const { id } = request.params;
-      const { clientClipId, recordedAt, wait } = request.query;
-      const { clip, created } = await clips.upload(user.id, id, request.body, { clientClipId, recordedAt });
+      const { clientClipId, recordedAt, kind, wait } = request.query;
+      const { clip, created } = await clips.upload(user.id, id, request.body, { clientClipId, recordedAt, kind });
 
       if (wait === "true") {
         await clips.waitFor(clip.id, WAIT_TIMEOUT_MS);

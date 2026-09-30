@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
-import type { Clip, QuoteDetail } from "../api/types";
+import type { Clip, ClipKind, QuoteDetail } from "../api/types";
 import type { RecordedClip } from "../audio/useClipRecorder";
 import { enqueueClip, onClipSent, retryQueued, useClipQueue } from "../offline/clipQueue";
 
@@ -112,11 +112,16 @@ export function useQuote(quoteId: string) {
 
   const send = useCallback((upload: Upload) => retryQueued(upload.clientClipId), []);
 
+  /** kind : dictée talkie-walkie (défaut) ou segment d'écoute passive. */
   const addClip = useCallback(
-    (clip: RecordedClip) =>
-      void enqueueClip({ quoteId, wav: clip.wav, durationMs: clip.durationMs, recordedAt: clip.recordedAt }).catch(
-        (err: unknown) => setError(`Dictée non enregistrée sur le téléphone : ${errorMessage(err)}`),
-      ),
+    (clip: RecordedClip, kind: ClipKind = "dictation") =>
+      void enqueueClip({
+        quoteId,
+        kind,
+        wav: clip.wav,
+        durationMs: clip.durationMs,
+        recordedAt: clip.recordedAt,
+      }).catch((err: unknown) => setError(`Enregistrement non gardé sur le téléphone : ${errorMessage(err)}`)),
     [quoteId],
   );
 

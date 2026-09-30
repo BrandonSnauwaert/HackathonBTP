@@ -156,6 +156,10 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE quotes ADD COLUMN response_name TEXT;
   ALTER TABLE quotes ADD COLUMN response_message TEXT;
   `,
+  `
+  -- Type d'enregistrement : dictée talkie-walkie, ou segment d'une écoute passive de la visite.
+  ALTER TABLE clips ADD COLUMN kind TEXT NOT NULL DEFAULT 'dictation';
+  `,
 ];
 
 export function openDatabase(path: string): Database {

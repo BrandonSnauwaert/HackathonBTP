@@ -6,6 +6,10 @@ import type { PatchOf } from "../types.js";
 export const CLIP_STATUSES = ["pending", "transcribing", "transcribed", "extracting", "done", "failed"] as const;
 export type ClipStatus = (typeof CLIP_STATUSES)[number];
 
+/** dictation = talkie-walkie ; passive = segment d'une écoute passive (conversation enregistrée). */
+export const CLIP_KINDS = ["dictation", "passive"] as const;
+export type ClipKind = (typeof CLIP_KINDS)[number];
+
 export const CLIP_STATUS_LABELS: Record<ClipStatus, string> = {
   pending: "En attente",
   transcribing: "Transcription en cours",
@@ -19,6 +23,7 @@ export interface Clip {
   id: string;
   quoteId: string;
   clientClipId: string | null;
+  kind: ClipKind;
   status: ClipStatus;
   audioFile: string;
   durationMs: number;
@@ -36,6 +41,7 @@ const ClipRow = z
     id: z.string(),
     quote_id: z.string(),
     client_clip_id: z.string().nullable(),
+    kind: z.enum(CLIP_KINDS),
     status: z.enum(CLIP_STATUSES),
     audio_file: z.string(),
     duration_ms: z.number(),
@@ -51,6 +57,7 @@ const ClipRow = z
     id: r.id,
     quoteId: r.quote_id,
     clientClipId: r.client_clip_id,
+    kind: r.kind,
     status: r.status,
     audioFile: r.audio_file,
     durationMs: r.duration_ms,
@@ -98,6 +105,15 @@ export function listUnfinishedClipIds(db: Database): string[] {
   ).map((r) => r.id);
 }
 
+/** Toutes les dictées non terminées, dans l'ordre de la file de transcription (estimation des délais). */
+export function listUnfinishedClips(db: Database): Clip[] {
+  return queryAll(
+    db,
+    ClipRow,
+    "SELECT * FROM clips WHERE status IN ('pending', 'transcribing', 'transcribed', 'extracting') ORDER BY created_at",
+  );
+}
+
 /** Propriétaire du devis d'un clip (le traitement de fond n'a pas de requête HTTP). */
 export function findClipOwner(db: Database, clipId: string): string | undefined {
   return queryOne(
@@ -110,13 +126,13 @@ export function findClipOwner(db: Database, clipId: string): string | undefined 
 
 export function insertClip(
   db: Database,
-  clip: Pick<Clip, "id" | "quoteId" | "clientClipId" | "audioFile" | "durationMs" | "recordedAt">,
+  clip: Pick<Clip, "id" | "quoteId" | "clientClipId" | "kind" | "audioFile" | "durationMs" | "recordedAt">,
 ): void {
   const now = new Date().toISOString();
   execute(
     db,
-    `INSERT INTO clips (id, quote_id, client_clip_id, status, audio_file, duration_ms, recorded_at, created_at, updated_at)
-     VALUES (:id, :quoteId, :clientClipId, 'pending', :audioFile, :durationMs, :recordedAt, :now, :now)`,
+    `INSERT INTO clips (id, quote_id, client_clip_id, kind, status, audio_file, duration_ms, recorded_at, created_at, updated_at)
+     VALUES (:id, :quoteId, :clientClipId, :kind, 'pending', :audioFile, :durationMs, :recordedAt, :now, :now)`,
     { ...clip, now },
   );
 }
@@ -149,9 +165,19 @@ export function countLinesByClip(db: Database, quoteId: string): Map<string, num
 }
 
 /** Clip tel qu'exposé par l'API. */
-export type ClipView = Omit<Clip, "quoteId" | "audioFile" | "attempts"> & { statusLabel: string; lineCount: number };
+export type ClipView = Omit<Clip, "quoteId" | "audioFile" | "attempts"> & {
+  statusLabel: string;
+  lineCount: number;
+  /** Fin de traitement estimée (ISO 8601), null une fois terminé. */
+  estimatedReadyAt: string | null;
+};
 
-export function toClipView(clip: Clip, lineCount: number): ClipView {
+export function toClipView(clip: Clip, lineCount: number, estimatedReadyAt: Date | undefined): ClipView {
   const { quoteId: _quoteId, audioFile: _audioFile, attempts: _attempts, ...rest } = clip;
-  return { ...rest, statusLabel: CLIP_STATUS_LABELS[clip.status], lineCount };
+  return {
+    ...rest,
+    statusLabel: CLIP_STATUS_LABELS[clip.status],
+    lineCount,
+    estimatedReadyAt: estimatedReadyAt?.toISOString() ?? null,
+  };
 }
