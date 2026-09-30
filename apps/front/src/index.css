@@ -784,12 +784,43 @@ a {
 
 /* --- Écoute passive (E2) */
 
-.card.passive {
-  gap: 10px;
+.passive-banner {
+  box-shadow: 0 0 0 2px var(--green-live);
 }
 
-.card.passive.on {
-  box-shadow: 0 0 0 2px var(--green-live);
+.passive-banner .b {
+  color: var(--green-dark);
+}
+
+.btn.passive-btn {
+  flex: none;
+  padding: 0 14px;
+  font-size: 16px;
+}
+
+/* Téléphone : Photo et Écoute en boutons compacts (icône sur libellé), le talkie-walkie garde la place. */
+@media (max-width: 1023px) {
+  .visit .ft .btns .photo-btn,
+  .visit .ft .btns .passive-btn {
+    flex-direction: column;
+    gap: 0;
+    padding: 0 12px;
+    min-width: 70px;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .visit .ft .btns .btn.talk {
+    padding: 0 10px;
+    font-size: 16px;
+  }
+}
+
+/* Arrêt de l'écoute passive : la seule action attendue pendant l'écoute. */
+.btn.stop {
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: 0 0 0 4px rgba(63, 210, 75, 0.35);
 }
 
 .consent {

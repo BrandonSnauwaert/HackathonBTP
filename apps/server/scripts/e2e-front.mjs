@@ -213,16 +213,16 @@ try {
   await expectThat("retour du réseau : le bandeau disparaît", (await text(".offline-banner")) === "");
 
   // 4. Écoute passive : accord du client obligatoire, segment envoyé à l'arrêt, temps restant affiché
-  await clickText(".seg button", "Écoute passive");
+  await clickText(".btn.passive-btn", "Écoute");
   await sleep(300);
   const blockedWithoutConsent = await ev(
-    `[...document.querySelectorAll(".card.passive button")].find((b) => b.textContent.includes("Démarrer")).disabled`,
+    `[...document.querySelectorAll(".sheet button")].find((b) => b.textContent.includes("Démarrer")).disabled`,
   );
-  await ev(`document.querySelector(".consent input").click()`);
-  await clickText(".card.passive button", "Démarrer l'écoute");
+  await ev(`document.querySelector(".sheet .consent input").click()`);
+  await clickText(".sheet button", "Démarrer l'écoute");
   await sleep(4000);
-  const listening = (await text(".card.passive.on")).includes("Écoute en cours");
-  await clickText(".card.passive button", "Arrêter l'écoute");
+  const listening = (await text(".passive-banner")).includes("Écoute en cours") && (await text(".sheet")) === "";
+  await clickText(".btn.stop", "Arrêter l'écoute");
   const etaShown = await waitUntil(async () => (await text(".eta")).includes("Tout sera prêt dans"), 8000, 250);
   const passiveArrived = await waitUntil(
     async () => (await api(`/quotes/${quote.id}`)).clips.some((c) => c.kind === "passive"),

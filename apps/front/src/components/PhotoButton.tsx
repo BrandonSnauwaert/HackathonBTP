@@ -26,7 +26,8 @@ export function PhotoButton(props: { quoteId: string; onAdded: () => void; class
 
   return (
     <label className={`btn ${props.className ?? ""}`} title={error ?? undefined}>
-      <span aria-hidden="true">◉</span> {pending > 0 ? "Envoi…" : error ? "Photo : échec" : "Photo"}
+      <span aria-hidden="true">◉</span>
+      <span>{pending > 0 ? "Envoi…" : error ? "Photo : échec" : "Photo"}</span>
       <input
         type="file"
         accept="image/*"
