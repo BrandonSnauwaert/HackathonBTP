@@ -112,7 +112,7 @@ export function HomeScreen({ session }: { session: Session }) {
               </button>
             ))}
             {toPrice.map((q) => (
-              <button key={q.id} className="card action" onClick={() => openQuote(q)}>
+              <button key={q.id} className="card info action" onClick={() => openQuote(q)}>
                 <div className="ic blue">€</div>
                 <div className="grow">
                   <div className="b">

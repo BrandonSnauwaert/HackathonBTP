@@ -330,6 +330,10 @@ a {
   background: var(--yellow-soft);
 }
 
+.card.info {
+  box-shadow: 0 0 0 2px var(--blue);
+}
+
 .card.flat {
   background: var(--surface-2);
   box-shadow: none;
@@ -1187,6 +1191,11 @@ a {
   background: var(--yellow-soft);
 }
 
+/* Ligne en cours de modification */
+.line.open {
+  box-shadow: 0 0 0 2px var(--blue);
+}
+
 .line-main {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1234,6 +1243,11 @@ a {
 
 .line-edit .btn.ghost {
   align-self: flex-start;
+}
+
+.line-actions .btn {
+  min-height: 48px;
+  font-size: 16px;
 }
 
 .photos-block {
