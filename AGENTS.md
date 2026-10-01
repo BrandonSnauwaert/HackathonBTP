@@ -28,7 +28,7 @@ apps/server/            API Node.js (Fastify, TypeScript)
   samples/              audio de test (chantier-fr.wav)
   api.http              parcours complet de l'API, rejouable depuis l'IDE
   openapi.json          doc OpenAPI exportée (générée : npm run openapi)
-apps/front/             application de l'artisan (React, Vite), d'après la maquette « Devis Vocal » (claude.ai/design)
+apps/front/             application de l'artisan, « BatiDevis » (React, Vite), d'après la maquette « Devis Vocal » (claude.ai/design)
   src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), clients et fiche client, mon entreprise, connexion ; fiches (client, nouvelle ligne)
   src/components/       cadre (barre latérale sur ordinateur, bandeau hors connexion), badges, bouton talkie-walkie, ligne de devis, totaux
   src/quotes/           useQuote (chargement, modifications, dictées, rafraîchissement, cache hors connexion), statuts, unités
@@ -74,6 +74,7 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Front : page client (E6) au style de la maquette et aperçu du document, ajout et modification complète des lignes, fiche client modifiable, suivi et accueil rafraîchis tout seuls, profil entreprise (« Mon entreprise »). Les liens des devis et le tunnel mènent à `apps/front` (5174).
 - [x] Front : page « Clients » (recherche, fiche avec ses devis et chiffres, nouveau devis sans ressaisie), clients existants proposés dans « Nouvelle visite », tri des devis (montant TTC, dernière activité), notes de chantier et dictées consultables sur un devis envoyé
 - [x] Front : thème sombre (suit le téléphone, ou forcé dans « Mon entreprise », page client comprise ; impression toujours en clair)
+- [x] Front : nom « BatiDevis », transitions entre écrans (sens du parcours), contenu en cascade, squelettes de chargement, feuilles animées ; animations coupées si le téléphone demande moins de mouvement
 - [ ] Bonus : PDF conforme, photos, relances automatiques
 
 Tenir cette liste à jour quand une étape est terminée.

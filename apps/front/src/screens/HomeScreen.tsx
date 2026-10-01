@@ -9,6 +9,7 @@ import { navigate } from "../router";
 import { NewVisitSheet } from "./NewVisitSheet";
 import { QuoteRow } from "../components/QuoteRow";
 import { RemindButton } from "../components/RemindButton";
+import { QuoteRowsSkeleton } from "../components/Skeleton";
 import { SORTS, compare, nextSort, type SortId } from "../quotes/sort";
 
 const HOME_POLL_MS = 5000;
@@ -79,7 +80,7 @@ export function HomeScreen({ session }: { session: Session }) {
         <div className="row only-mobile">
           <div className="row start">
             <Logo />
-            <span className="b">Devis Vocal</span>
+            <span className="b">BatiDevis</span>
           </div>
           <div className="row start">
             <button className="btn ghost" onClick={() => navigate({ name: "stats" })}>
@@ -172,7 +173,7 @@ export function HomeScreen({ session }: { session: Session }) {
             <SortHeader label="Dernière activité" column="activity" sort={sort} onSort={setSort} />
             <span className="r">Action</span>
           </div>
-          {quotes === null && !error && <p className="mut">Chargement…</p>}
+          {quotes === null && !error && <QuoteRowsSkeleton />}
           {quotes !== null && shown.length === 0 && <p className="mut empty">Aucun devis ici.</p>}
           {shown.map((q) => (
             <QuoteRow key={q.id} quote={q} name={quoteName(q)} action={remindButton(q)} />

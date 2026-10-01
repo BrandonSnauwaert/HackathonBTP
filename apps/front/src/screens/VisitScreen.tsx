@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from "../components/Skeleton";
 import { useEffect, useState } from "react";
 import { useClipRecorder } from "../audio/useClipRecorder";
 import { usePassiveListening } from "../audio/usePassiveListening";
@@ -50,7 +51,7 @@ export function VisitScreen({ quoteId }: { quoteId: string }) {
   // Pendant toute la visite : l'artisan pose souvent le téléphone entre deux dictées.
   useWakeLock(true);
 
-  if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
+  if (!quote) return <ScreenSkeleton error={error} />;
 
   const editable = isEditable(quote.status);
   const warnings = clipWarnings(quote);

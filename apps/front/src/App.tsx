@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "./api/client";
 import type { Company, User } from "./api/types";
 import { AppShell, type Session } from "./components/AppShell";
+import { AppSplash } from "./components/Skeleton";
 import { useRoute } from "./router";
 import { ClientScreen, ClientsScreen } from "./screens/ClientsScreen";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -76,7 +77,7 @@ export default function App() {
     [],
   );
 
-  if (user === undefined) return <p className="loading">Chargement…</p>;
+  if (user === undefined) return <AppSplash />;
   if (user === null) return <LoginScreen onLogin={setUser} />;
 
   const session: Session = { user, company, logout };

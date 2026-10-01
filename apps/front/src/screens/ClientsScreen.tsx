@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { Client, QuoteSummary } from "../api/types";
 import { QuoteRow } from "../components/QuoteRow";
+import { ClientRowsSkeleton, ScreenSkeleton, Skeleton } from "../components/Skeleton";
 import { formatCents, formatRelative, initials } from "../format";
 import { clientStats, searchClients } from "../clients/clients";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
@@ -53,7 +54,7 @@ export function ClientsScreen() {
         </button>
         <h1 className="h1">Clients</h1>
         <div className="mut">
-          {clients === null ? "Chargement…" : `${clients.length} client${clients.length > 1 ? "s" : ""}`}
+          {clients === null ? <Skeleton w={80} h={16} /> : `${clients.length} client${clients.length > 1 ? "s" : ""}`}
         </div>
       </header>
 
@@ -70,6 +71,7 @@ export function ClientsScreen() {
         </label>
 
         <div className="clist">
+          {clients === null && !error && <ClientRowsSkeleton />}
           {clients !== null && rows.length === 0 && (
             <p className="mut empty">{query ? "Aucun client ne correspond." : "Aucun client pour l'instant."}</p>
           )}
@@ -107,7 +109,8 @@ export function ClientScreen({ clientId }: { clientId: string }) {
   const client = clients?.find((c) => c.id === clientId);
 
   if (!client) {
-    return <p className="loading">{clients === null ? (error ?? "Chargement…") : "Client introuvable."}</p>;
+    if (clients === null) return <ScreenSkeleton error={error} />;
+    return <p className="loading">Client introuvable.</p>;
   }
 
   const stats = clientStats(client, quotes);

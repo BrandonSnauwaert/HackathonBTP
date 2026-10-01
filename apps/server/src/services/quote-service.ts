@@ -285,7 +285,7 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       trackingUrl: `${options.publicBaseUrl()}/#/devis/${quote.id}/suivi`,
     });
     options.mailer
-      .send({ to: { address: to, name: company.name }, fromName: "Devis Vocal", ...email })
+      .send({ to: { address: to, name: company.name }, fromName: "BatiDevis", ...email })
       .catch((err: unknown) => options.onBackgroundError?.(err, "avis de réponse à l'artisan non envoyé"));
   }
 

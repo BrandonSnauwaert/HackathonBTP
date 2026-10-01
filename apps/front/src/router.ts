@@ -49,6 +49,24 @@ export function routePath(route: Route): string {
   }
 }
 
+/** Profondeur d'un écran dans le parcours (0 : écrans principaux) : donne le sens de l'animation de transition. */
+export function routeDepth(route: Route): number {
+  switch (route.name) {
+    case "home":
+    case "profile":
+    case "clients":
+    case "stats":
+      return 0;
+    case "client":
+    case "visit":
+    case "quote":
+      return 1;
+    case "send":
+    case "tracking":
+      return 2;
+  }
+}
+
 export const navigate = (route: Route) => {
   window.location.hash = routePath(route);
 };

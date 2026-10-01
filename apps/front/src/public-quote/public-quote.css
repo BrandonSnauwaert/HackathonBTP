@@ -707,3 +707,33 @@
     break-inside: avoid;
   }
 }
+
+/* Document en cours de chargement (squelette, voir components/Skeleton.tsx). */
+.pq-sheet-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  animation: rise 420ms var(--ease-out) backwards;
+}
+
+.pq-sk-head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pq-sk-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pq-sk-totals {
+  align-items: flex-end;
+}
+
+.pq-page {
+  animation: fade-in 300ms ease-out backwards;
+}

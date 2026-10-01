@@ -1,5 +1,5 @@
 /*
- * Styles de la maquette « Devis Vocal » (claude.ai/design, Devis Vocal Maquette.dc.html).
+ * BatiDevis — styles de la maquette « Devis Vocal » (claude.ai/design, Devis Vocal Maquette.dc.html).
  * Mobile d'abord ; au-delà de 1024 px, barre latérale et mises en page sur deux colonnes.
  * Bleu : action principale · Vert : détecté, conforme · Jaune : à vérifier, relance · Gris : secondaire.
  */
@@ -31,6 +31,12 @@
   --warn-ink: #7a6300;
   --radius: 16px;
   --shadow-ft: 0 -1px 0 var(--line), 0 -8px 24px rgba(20, 24, 30, 0.06);
+  /* Squelettes de chargement : fond et reflet qui passe. */
+  --sk-base: #e8eaed;
+  --sk-shine: #f6f7f8;
+  /* Courbes des animations : sortie douce, et léger rebond. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   color-scheme: light;
 
@@ -72,6 +78,8 @@
     --on-ink: #16181b;
     --warn-ink: #f3d54e;
     --shadow-ft: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.4);
+    --sk-base: #24272b;
+    --sk-shine: #33373c;
 
     color-scheme: dark;
   }
@@ -100,6 +108,8 @@
   --on-ink: #16181b;
   --warn-ink: #f3d54e;
   --shadow-ft: 0 -1px 0 var(--line), 0 -8px 24px rgba(0, 0, 0, 0.4);
+  --sk-base: #24272b;
+  --sk-shine: #33373c;
 
   color-scheme: dark;
 }
@@ -1242,6 +1252,11 @@ a {
   background: var(--blue-soft);
 }
 
+/* Le champ de recherche garde sa hauteur, même quand la liste est courte (recherche, chargement). */
+.clients .bd > .field {
+  flex: none;
+}
+
 .clist {
   display: flex;
   flex-direction: column;
@@ -2184,5 +2199,339 @@ a {
   .line-main .l-badge {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+}
+
+/*
+ * --- Animations
+ * Changement d'écran (sens du parcours), apparition du contenu en cascade, squelettes de chargement,
+ * feuilles qui montent, retour visuel au toucher. Courtes (< 0,5 s) : l'artisan ne doit jamais attendre.
+ * Les animations d'entrée gardent `backwards` (et non `both`) : une fois finies, plus aucune transformation
+ * ne reste sur l'écran, sinon les éléments en position fixe (feuilles) se caleraient sur lui.
+ */
+
+/* Pas de barre de défilement horizontale pendant qu'un écran glisse ; `clip` garde les en-têtes collants. */
+.main {
+  overflow-x: clip;
+}
+
+.page {
+  animation: page-fade 380ms var(--ease-out) backwards;
+}
+
+.page-forward {
+  animation-name: page-forward;
+}
+
+.page-back {
+  animation-name: page-back;
+}
+
+@keyframes page-fade {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+}
+
+@keyframes page-forward {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+
+@keyframes page-back {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * Contenu d'un écran qui arrive en cascade : en-tête, puis chaque bloc. :where() garde une priorité nulle,
+ * pour ne jamais écraser une animation propre à un élément (pulsation, barres des graphiques...).
+ */
+:where(.page .hd) > *,
+:where(.page .bd) > * {
+  animation: rise 460ms var(--ease-out) backwards;
+}
+
+:where(.page .hd) > :nth-child(2) {
+  animation-delay: 40ms;
+}
+:where(.page .hd) > :nth-child(n + 3) {
+  animation-delay: 80ms;
+}
+:where(.page .bd) > :nth-child(1) {
+  animation-delay: 90ms;
+}
+:where(.page .bd) > :nth-child(2) {
+  animation-delay: 130ms;
+}
+:where(.page .bd) > :nth-child(3) {
+  animation-delay: 170ms;
+}
+:where(.page .bd) > :nth-child(4) {
+  animation-delay: 210ms;
+}
+:where(.page .bd) > :nth-child(n + 5) {
+  animation-delay: 250ms;
+}
+
+/* Lignes des listes (devis, clients) : une à une, y compris celles qui arrivent après un rafraîchissement. */
+:where(.qlist, .clist) > .card {
+  animation: rise 420ms var(--ease-out) backwards;
+}
+:where(.qlist, .clist) > .card:nth-child(2) {
+  animation-delay: 40ms;
+}
+:where(.qlist, .clist) > .card:nth-child(3) {
+  animation-delay: 80ms;
+}
+:where(.qlist, .clist) > .card:nth-child(4) {
+  animation-delay: 120ms;
+}
+:where(.qlist, .clist) > .card:nth-child(5) {
+  animation-delay: 160ms;
+}
+:where(.qlist, .clist) > .card:nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+
+/* --- Squelettes de chargement (components/Skeleton.tsx) */
+
+.sk {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(100deg, transparent 30%, var(--sk-shine) 50%, transparent 70%) var(--sk-base);
+  background-size: 250% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
+.sk-row {
+  pointer-events: none;
+  animation: rise 420ms var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+.qrow.card.sk-row {
+  cursor: default;
+}
+
+.sk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.c-stats.sk-stack {
+  align-items: flex-end;
+}
+
+.sk-totals {
+  gap: 12px;
+}
+
+/* Démarrage de l'application : logo qui apparaît puis respire, barre de progression. */
+.splash {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+}
+
+.splash-logo.ic.logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  font-size: 28px;
+  box-shadow: 0 12px 30px -10px rgba(0, 121, 184, 0.55);
+  animation:
+    splash-pop 700ms var(--ease-spring) backwards,
+    splash-breathe 1.8s ease-in-out 700ms infinite;
+}
+
+.splash-name {
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  animation: rise 500ms var(--ease-out) 150ms backwards;
+}
+
+.splash-bar {
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sk-base);
+  overflow: hidden;
+  animation: fade-in 400ms ease-out 300ms backwards;
+}
+
+.splash-bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--blue);
+  animation: indeterminate 1.1s var(--ease-out) infinite;
+}
+
+@keyframes splash-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes splash-breathe {
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes indeterminate {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+/* Connexion : le formulaire arrive en cascade. */
+.login > * {
+  animation: rise 500ms var(--ease-out) backwards;
+}
+.login > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.login > :nth-child(3) {
+  animation-delay: 110ms;
+}
+.login > :nth-child(4) {
+  animation-delay: 160ms;
+}
+.login > :nth-child(n + 5) {
+  animation-delay: 210ms;
+}
+
+/* --- Feuilles (nouvelle visite, nouvelle ligne...) : fond qui s'assombrit, feuille qui monte. */
+
+.sheet-backdrop {
+  animation: fade-in 220ms ease-out backwards;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.sheet {
+  animation: sheet-up 420ms var(--ease-out) backwards;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-pop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+/* --- Retour visuel au toucher et au survol */
+
+.btn,
+.chip,
+.nav,
+.card.action,
+.card.crow,
+.qrow.card,
+.ic.avatar,
+.th-sort {
+  transition:
+    transform 180ms var(--ease-out),
+    background-color 200ms ease,
+    box-shadow 200ms ease,
+    color 200ms ease,
+    opacity 200ms ease;
+}
+
+.btn:not(:disabled, .talk):active,
+.chip:active,
+.nav:active,
+.card.action:active,
+.card.crow:active,
+button.ic.avatar:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .card.crow:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 10px 24px -12px rgba(20, 24, 30, 0.25);
+  }
+
+  .btn.pri:not(:disabled):hover {
+    box-shadow: 0 8px 20px -10px var(--blue);
+  }
+
+  .nav:not(.on):hover {
+    background: var(--surface-2);
+  }
+}
+
+/* Statut d'un devis qui change (consulté, accepté...) : la pastille apparaît en douceur. */
+.bdg {
+  animation: fade-in 300ms ease-out backwards;
+}
+
+@media (min-width: 1024px) {
+  .sheet {
+    animation-name: sheet-pop;
+    animation-duration: 320ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+
+  .sk {
+    background: var(--sk-base);
   }
 }

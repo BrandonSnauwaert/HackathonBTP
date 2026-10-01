@@ -137,6 +137,6 @@ export function buildResponseNotification(input: {
     ],
     button: { label: "Voir le suivi du devis", url: input.trackingUrl },
     after: accepted ? ["Pensez à le contacter pour caler le début des travaux."] : [],
-    signature: ["Devis Vocal"],
+    signature: ["BatiDevis"],
   });
 }

@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from "../components/Skeleton";
 import { useState } from "react";
 import { api } from "../api/client";
 import type { Company, QuoteDetail } from "../api/types";
@@ -42,7 +43,7 @@ function mentions(quote: QuoteDetail, company: Company | null): Mention[] {
 export function SendScreen({ quoteId, company }: { quoteId: string; company: Company | null }) {
   const { quote, error, run } = useQuote(quoteId);
   const [byEmail, setByEmail] = useState(true);
-  if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
+  if (!quote) return <ScreenSkeleton error={error} />;
 
   const list = mentions(quote, company);
   const okCount = list.filter((m) => m.ok).length;

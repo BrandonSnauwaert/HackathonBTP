@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from "../components/Skeleton";
 import { api } from "../api/client";
 import type { QuoteDetail, QuoteEvent, QuoteStatus } from "../api/types";
 import { StatusBadge } from "../components/Badge";
@@ -99,7 +100,7 @@ export function TrackingScreen({ quoteId }: { quoteId: string }) {
   const [copied, setCopied] = useState(false);
   const [resent, setResent] = useState(false);
   const [editingClient, setEditingClient] = useState(false);
-  if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
+  if (!quote) return <ScreenSkeleton error={error} />;
 
   const { client, response } = quote;
 

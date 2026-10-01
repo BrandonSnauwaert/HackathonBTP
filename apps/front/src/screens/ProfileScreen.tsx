@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from "../components/Skeleton";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
 import type { Company } from "../api/types";
@@ -114,7 +115,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
  * (SIRET, TVA, assurance décennale), valeurs par défaut des nouveaux devis.
  */
 export function ProfileScreen({ session, onSaved }: { session: Session; onSaved: (company: Company) => void }) {
-  if (!session.company) return <p className="loading">Chargement…</p>;
+  if (!session.company) return <ScreenSkeleton />;
   return <ProfileForm session={session} company={session.company} onSaved={onSaved} />;
 }
 

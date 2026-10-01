@@ -1,8 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Company, User } from "../api/types";
 import { initials } from "../format";
 import { useClipQueue } from "../offline/clipQueue";
-import { navigate, type Route } from "../router";
+import { navigate, routeDepth, routePath, type Route } from "../router";
 
 export interface Session {
   user: User;
@@ -13,12 +13,38 @@ export interface Session {
 export function Logo({ size = 30 }: { size?: number }) {
   return (
     <div className="ic logo" style={{ width: size, height: size }}>
-      DV
+      BD
     </div>
   );
 }
 
-/** Cadre de l'application : barre latérale sur ordinateur, plein écran sur téléphone. */
+type Direction = "forward" | "back" | "fade";
+
+/**
+ * Animation de changement d'écran, selon le sens du parcours : vers un écran plus profond (devis → envoi),
+ * il arrive de la droite ; en revenant, de la gauche ; entre écrans principaux (accueil, clients…), fondu.
+ * L'écran repart en haut de page.
+ */
+function PageTransition({ route, children }: { route: Route; children: ReactNode }) {
+  const path = routePath(route);
+  const depth = routeDepth(route);
+  const [current, setCurrent] = useState({ path, depth, direction: "fade" as Direction });
+  if (current.path !== path) {
+    const direction = depth > current.depth ? "forward" : depth < current.depth ? "back" : "fade";
+    setCurrent({ path, depth, direction });
+  }
+
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [path]);
+
+  return (
+    <div key={path} className={`page page-${current.direction}`}>
+      {children}
+    </div>
+  );
+}
+
 /** Bandeau hors connexion : l'artisan sait que ses dictées sont gardées et partiront seules. */
 function OfflineBanner() {
   const { online, clips, sending } = useClipQueue();
@@ -36,6 +62,7 @@ function OfflineBanner() {
   );
 }
 
+/** Cadre de l'application : barre latérale sur ordinateur, plein écran sur téléphone. */
 export function AppShell({ session, route, children }: { session: Session; route: Route; children: ReactNode }) {
   const companyName = session.company?.name || session.user.email;
   return (
@@ -43,7 +70,7 @@ export function AppShell({ session, route, children }: { session: Session; route
       <aside className="side">
         <div className="side-brand">
           <Logo size={34} />
-          <span className="b">Devis Vocal</span>
+          <span className="b">BatiDevis</span>
         </div>
         <button className={`nav ${route.name === "home" ? "on" : ""}`} onClick={() => navigate({ name: "home" })}>
           Accueil
@@ -72,7 +99,7 @@ export function AppShell({ session, route, children }: { session: Session; route
       </aside>
       <main className="main">
         <OfflineBanner />
-        {children}
+        <PageTransition route={route}>{children}</PageTransition>
       </main>
     </div>
   );

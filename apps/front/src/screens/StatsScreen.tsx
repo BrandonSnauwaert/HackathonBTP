@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { QuoteSummary } from "../api/types";
+import { StatsSkeleton } from "../components/Skeleton";
 import { PerformanceCharts, PerformanceTiles } from "../dashboard/Performance";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
@@ -34,7 +35,7 @@ export function StatsScreen() {
       </header>
       <div className="bd">
         {error && <p className="error-text">{error}</p>}
-        {quotes === null && !error && <p className="mut">Chargement…</p>}
+        {quotes === null && !error && <StatsSkeleton />}
         {quotes !== null && <PerformanceTiles quotes={quotes} />}
         {quotes !== null && <PerformanceCharts quotes={quotes} />}
         {quotes !== null && quotes.every((q) => q.sentAt === null) && (

@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from "../components/Skeleton";
 import { useState } from "react";
 import { api } from "../api/client";
 import type { Company } from "../api/types";
@@ -23,7 +24,7 @@ export function QuoteScreen({ quoteId, company }: { quoteId: string; company: Co
   const [sheet, setSheet] = useState<"line" | "labor" | "client" | null>(null);
   const hourlyRateCents = company?.hourlyRateCents ?? null;
 
-  if (!quote) return <p className="loading">{error ?? "Chargement…"}</p>;
+  if (!quote) return <ScreenSkeleton error={error} />;
 
   const editable = isEditable(quote.status);
   const toReview = quote.lines.filter(needsReview).length;

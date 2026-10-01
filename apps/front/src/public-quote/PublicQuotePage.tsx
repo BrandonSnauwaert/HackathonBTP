@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { QuoteDocument } from "../api/types";
+import { Skeleton } from "../components/Skeleton";
 import { formatCents, formatFullDate } from "../format";
 import { QuoteSheet } from "./QuoteSheet";
 import { ResponsePanel } from "./ResponsePanel";
@@ -50,10 +51,11 @@ export default function PublicQuotePage({ source }: { source: PublicQuoteSource 
     if (loadedDoc) document.title = `Devis ${loadedDoc.number} · ${loadedDoc.company.name}`;
   }, [loadedDoc]);
 
+  if (state.status === "loading") return <DocumentSkeleton />;
   if (state.status !== "ready") {
     return (
       <main className="pq-page pq-page-message">
-        <p>{state.status === "loading" ? "Chargement du devis…" : state.message}</p>
+        <p>{state.message}</p>
       </main>
     );
   }
@@ -137,4 +139,35 @@ function StatusBanner({ doc }: { doc: QuoteDocument }) {
     );
   }
   return null;
+}
+
+/** Le document en cours de chargement : en-tête, lignes et totaux esquissés sur la feuille. */
+function DocumentSkeleton() {
+  return (
+    <main className="pq-page" aria-busy="true" aria-label="Chargement du devis">
+      <article className="pq-sheet pq-sheet-skeleton">
+        <div className="pq-sk-head">
+          <Skeleton w={64} h={64} r={14} />
+          <div className="sk-stack grow">
+            <Skeleton w="45%" h={20} />
+            <Skeleton w="60%" h={14} />
+            <Skeleton w="35%" h={14} />
+          </div>
+        </div>
+        <Skeleton w="40%" h={30} r={10} />
+        <div className="sk-stack">
+          {[72, 58, 80, 46, 64].map((w, i) => (
+            <div key={i} className="pq-sk-line">
+              <Skeleton w={`${w}%`} h={16} />
+              <Skeleton w={80} h={16} />
+            </div>
+          ))}
+        </div>
+        <div className="pq-sk-totals sk-stack">
+          <Skeleton w={200} h={16} />
+          <Skeleton w={240} h={26} />
+        </div>
+      </article>
+    </main>
+  );
 }

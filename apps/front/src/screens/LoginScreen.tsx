@@ -27,7 +27,7 @@ export function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
     <form className="login" onSubmit={(e) => void submit(e)}>
       <div className="row start">
         <Logo size={40} />
-        <span className="h2">Devis Vocal</span>
+        <span className="h2">BatiDevis</span>
       </div>
       <h1 className="h1">Connexion</h1>
       <label className="field">
