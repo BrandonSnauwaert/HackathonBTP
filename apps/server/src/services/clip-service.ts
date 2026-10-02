@@ -124,17 +124,22 @@ export function createClipService(deps: ClipServiceDeps) {
         transcript,
         kind: clip.kind,
         existingLines: listLines(db, clip.quoteId).map((l) => ({
+          id: l.id,
           description: l.description,
           room: l.room,
           quantity: l.quantity,
           unit: l.unit,
+          vatRateBp: l.vatRateBp,
         })),
       });
-      quotes.addDictatedLines(userId, clip.quoteId, clipId, result.lines);
-      const warnings =
-        result.lines.length === 0 ? ["Aucune prestation détectée dans la dictée", ...result.warnings] : result.warnings;
+      quotes.applyDictation(userId, clip.quoteId, clipId, result);
+      const changed = result.lines.length + result.updates.length + result.deletions.length > 0;
+      const warnings = changed ? result.warnings : ["Aucune prestation détectée dans la dictée", ...result.warnings];
       updateClip(db, clipId, { status: "done", warnings });
-      logger.info({ clipId, lines: result.lines.length }, "dictée traitée");
+      logger.info(
+        { clipId, added: result.lines.length, updated: result.updates.length, deleted: result.deletions.length },
+        "dictée traitée",
+      );
       notify(clipId);
     } catch (err) {
       fail(clipId, err);

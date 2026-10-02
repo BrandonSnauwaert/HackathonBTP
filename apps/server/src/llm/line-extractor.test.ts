@@ -29,6 +29,18 @@ const input = {
   existingLines: [],
 };
 
+const existingLines = [
+  {
+    id: "window-id",
+    description: "Remplacement de la fenêtre",
+    room: "Cuisine",
+    quantity: 1,
+    unit: "u",
+    vatRateBp: 1000,
+  },
+  { id: "floor-id", description: "Ragréage du sol", room: "Cuisine", quantity: 12, unit: "m2", vatRateBp: 1000 },
+] as const;
+
 describe("parseJsonResponse", () => {
   it("accepte du JSON brut, entouré de ```json ou de texte", () => {
     assert.deepEqual(parseJsonResponse('{"a":1}'), { a: 1 });
@@ -89,6 +101,29 @@ describe("createLlmLineExtractor", () => {
     assert.match(llm.calls[1]?.at(-1)?.content ?? "", /Réponse invalide/);
   });
 
+  it("modifie et supprime les lignes existantes visées par leur référence", async () => {
+    const llm = fakeLlm([
+      JSON.stringify({
+        lines: [],
+        updates: [
+          { ref: "L2", quantity: "15", unit: "m²" },
+          { ref: "L1", quantity: 3 },
+          { ref: "L9", quantity: 2 },
+        ],
+        deletions: ["L1", "L7"],
+        missing: [],
+      }),
+    ]);
+    const result = await createLlmLineExtractor(llm).extract({
+      transcript: "Supprime la fenêtre de la cuisine et passe le ragréage à 15 m².",
+      existingLines,
+    });
+    assert.deepEqual(result.deletions, ["window-id"]);
+    assert.deepEqual(result.updates, [{ lineId: "floor-id", changes: { quantity: 15, unit: "m2" } }]);
+    assert.deepEqual(result.lines, []);
+    assert.match(llm.calls[0]?.[1]?.content ?? "", /"ref":"L1","description":"Remplacement de la fenêtre"/);
+  });
+
   it("abandonne après deux réponses invalides", async () => {
     const llm = fakeLlm(["non", '{"lines":[{"quantity":1}]}']);
     await assert.rejects(createLlmLineExtractor(llm).extract(input), LlmError);
@@ -145,15 +180,25 @@ describe("mockLineExtractor", () => {
     );
     assert.equal(result.lines[1]?.room, "Salle de bain");
   });
+
+  it("supprime la ligne visée par « supprime … » au lieu d'en créer une", async () => {
+    const result = await mockLineExtractor.extract({
+      transcript: "Supprime le remplacement de la fenêtre dans la cuisine.",
+      existingLines,
+    });
+    assert.deepEqual(result.deletions, ["window-id"]);
+    assert.equal(result.lines.length, 0);
+  });
 });
 
 describe("buildUserPrompt", () => {
-  const existingLines = [{ description: "Pose d'une porte", room: "Cuisine", quantity: 1, unit: "u" as const }];
-
-  it("présente une dictée comme telle, avec les lignes déjà présentes", () => {
+  it("présente une dictée comme telle, avec les lignes déjà présentes en JSON référencé", () => {
     const prompt = buildUserPrompt({ transcript: "changer la porte", existingLines });
     assert.match(prompt, /Transcription de la dictée/);
-    assert.match(prompt, /\[Cuisine\] Pose d'une porte \(1 u\)/);
+    assert.match(
+      prompt,
+      /\{"ref":"L1","description":"Remplacement de la fenêtre","room":"Cuisine","quantity":1,"unit":"u","vatRate":10\}/,
+    );
     assert.doesNotMatch(prompt, /conversation/);
   });
 

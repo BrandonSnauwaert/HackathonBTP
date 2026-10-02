@@ -25,7 +25,7 @@ import { EmailError, type Mailer } from "../email/mailer.js";
 import { buildQuoteEmail, buildReminderEmail, buildResponseNotification } from "../email/quote-email.js";
 import * as repo from "../repositories/quotes.js";
 import type { LineInput, Quote, QuoteEvent, QuoteLine, QuoteUpdate } from "../repositories/quotes.js";
-import type { ExtractedLine } from "../llm/line-extractor.js";
+import type { ExtractionResult } from "../llm/line-extractor.js";
 import type { PatchOf } from "../types.js";
 import type { ClipEstimator } from "./clip-estimates.js";
 
@@ -432,13 +432,35 @@ export function createQuoteService(db: Database, options: QuoteServiceOptions) {
       loadEditable(userId, quoteId);
     },
 
-    /** Ajoute les lignes extraites d'une dictée, en fin de devis. */
-    addDictatedLines(userId: string, quoteId: string, clipId: string, lines: readonly ExtractedLine[]): void {
+    /**
+     * Applique le résultat d'une dictée : suppressions et modifications des lignes visées, puis nouvelles lignes
+     * en fin de devis. Une ligne supprimée entre-temps par l'artisan est ignorée.
+     */
+    applyDictation(
+      userId: string,
+      quoteId: string,
+      clipId: string,
+      result: Pick<ExtractionResult, "lines" | "updates" | "deletions">,
+    ): void {
       const quote = loadEditable(userId, quoteId);
-      if (lines.length === 0) return;
+      if (result.lines.length + result.updates.length + result.deletions.length === 0) return;
       transaction(db, () => {
         const company = getCompany(db, userId);
-        for (const line of lines) {
+        const current = new Map(repo.listLines(db, quote.id).map((l) => [l.id, l]));
+        for (const lineId of result.deletions) {
+          if (current.has(lineId)) repo.deleteLine(db, quote.id, lineId);
+        }
+        for (const { lineId, changes } of result.updates) {
+          const line = current.get(lineId);
+          if (!line || result.deletions.includes(lineId)) continue;
+          // Passage en heures d'une ligne sans prix : le taux horaire est proposé, comme à la main.
+          const priced =
+            changes.unit === "h" && line.unitPriceCents === null
+              ? withHourlyRate(company, { ...changes, unitPriceCents: null })
+              : changes;
+          repo.updateLine(db, quote.id, lineId, priced);
+        }
+        for (const line of result.lines) {
           repo.insertLine(db, quote.id, withHourlyRate(company, { ...line, source: "dictation" as const, clipId }));
         }
         touch(quote);

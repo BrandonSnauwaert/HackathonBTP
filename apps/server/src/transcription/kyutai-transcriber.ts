@@ -56,9 +56,22 @@ const SILENCE_FRAME: readonly number[] = new Array<number>(FRAME_SAMPLES).fill(0
  * mot (constaté sur de vraies dictées ; le script officiel de Kyutai en envoie aussi). ~1,5 s.
  */
 const TRAILING_SILENCE_FRAMES = 19;
+/**
+ * Silence envoyé AVANT l'audio (~1 s) : quand la parole commence dès la première trame, Kyutai peut
+ * décrocher et ne rien transcrire pendant de longues secondes (constaté sur une écoute passive de 61 s :
+ * 5 mots sans ce silence, tout le texte avec).
+ */
+const LEADING_SILENCE_FRAMES = 13;
 /** Cadence d'envoi du silence : 80 ms d'audio toutes les 20 ms, soit 4× le temps réel. */
 const SILENCE_INTERVAL_MS = 20;
-const FLUSH_TIMEOUT_MS = 60_000;
+/** Silence envoyé au plus après le marqueur : 10 s d'audio (le modèle a ~2,5 s de retard). */
+const MAX_SILENCE_FRAMES_AFTER_MARKER = 125;
+/**
+ * Abandon de flush() si Kyutai ne renvoie plus rien pendant ce délai. Délai d'inactivité, pas de durée totale :
+ * un clip est envoyé d'un coup et Kyutai le traite à ~1,15× le temps réel (≈ 5 min pour un segment passif
+ * de 4 min 30), en renvoyant un message par trame de 80 ms traitée. Le silence est donc le seul signe de blocage.
+ */
+const FLUSH_IDLE_TIMEOUT_MS = 60_000;
 
 /**
  * Transcriber branché sur moshi-server (Kyutai STT).
@@ -76,6 +89,8 @@ export class KyutaiTranscriber implements Transcriber {
   private readonly markerWaiters = new Map<number, { resolve: () => void; reject: (err: Error) => void }>();
   private readonly sentences: SentenceAssembler;
   private closed = false;
+  /** Dernier message reçu de Kyutai (Date.now()), pour détecter un blocage pendant flush(). */
+  private lastMessageAt = Date.now();
 
   constructor(private readonly options: KyutaiTranscriberOptions) {
     this.sentences = new SentenceAssembler({
@@ -85,6 +100,7 @@ export class KyutaiTranscriber implements Transcriber {
       },
     });
     this.ws = new WebSocket(options.url, { headers: { "kyutai-api-key": options.apiKey } });
+    for (let i = 0; i < LEADING_SILENCE_FRAMES; i++) this.send({ type: "Audio", pcm: SILENCE_FRAME });
 
     this.ws.on("open", () => {
       options.logger.info({ url: options.url }, "connecté à Kyutai STT");
@@ -122,15 +138,22 @@ export class KyutaiTranscriber implements Transcriber {
     const id = ++this.lastMarkerId;
 
     return new Promise<void>((resolve, reject) => {
-      const silence = setInterval(() => this.send({ type: "Audio", pcm: SILENCE_FRAME }), SILENCE_INTERVAL_MS);
-      const timeout = setTimeout(() => {
+      // Silence plafonné : Kyutai le traite après tout l'audio en attente, quelques secondes suffisent à dépasser le marqueur.
+      let silenceFrames = 0;
+      const silence = setInterval(() => {
+        if (silenceFrames++ < MAX_SILENCE_FRAMES_AFTER_MARKER) this.send({ type: "Audio", pcm: SILENCE_FRAME });
+      }, SILENCE_INTERVAL_MS);
+      this.lastMessageAt = Date.now();
+      const watchdog = setInterval(() => {
+        if (Date.now() - this.lastMessageAt < FLUSH_IDLE_TIMEOUT_MS) return;
         this.markerWaiters.delete(id);
         clearInterval(silence);
-        reject(new Error("Transcription Kyutai : délai dépassé"));
-      }, FLUSH_TIMEOUT_MS);
+        clearInterval(watchdog);
+        reject(new Error("Transcription Kyutai : plus de réponse du service depuis 60 s"));
+      }, 1000);
       const done = () => {
         clearInterval(silence);
-        clearTimeout(timeout);
+        clearInterval(watchdog);
         this.markerWaiters.delete(id);
       };
 
@@ -184,6 +207,7 @@ export class KyutaiTranscriber implements Transcriber {
   }
 
   private handleMessage(data: RawData): void {
+    this.lastMessageAt = Date.now();
     let message: KyutaiMessage;
     try {
       const raw = Array.isArray(data) ? Buffer.concat(data) : data;

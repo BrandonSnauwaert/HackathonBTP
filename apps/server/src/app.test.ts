@@ -10,7 +10,12 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app.js";
 import { parseConfig } from "./config.js";
 import { openDatabase } from "./db/database.js";
-import { mockLineExtractor, type LineExtractor } from "./llm/line-extractor.js";
+import {
+  mockLineExtractor,
+  type ExtractionInput,
+  type ExtractionResult,
+  type LineExtractor,
+} from "./llm/line-extractor.js";
 import type { EmailMessage, Mailer } from "./email/mailer.js";
 
 const clipsDir = mkdtempSync(join(tmpdir(), "clips-"));
@@ -35,16 +40,24 @@ const flakyExtractor: LineExtractor & {
   gate: Promise<void> | null;
   /** Type de chaque enregistrement reçu (dictée ou écoute passive). */
   kinds: (string | undefined)[];
+  /** Réponse imposée pour le prochain appel, à partir des lignes existantes reçues. */
+  respondNext: ((input: ExtractionInput) => ExtractionResult) | null;
 } = {
   failNext: false,
   gate: null,
   kinds: [],
+  respondNext: null,
   async extract(input) {
     this.kinds.push(input.kind);
     if (this.gate) await this.gate;
     if (this.failNext) {
       this.failNext = false;
       throw new Error("LLM indisponible");
+    }
+    if (this.respondNext) {
+      const respond = this.respondNext;
+      this.respondNext = null;
+      return respond(input);
     }
     return mockLineExtractor.extract(input);
   },
@@ -339,6 +352,62 @@ describe("API", () => {
     assert.equal(part.statusCode, 206);
     assert.equal(part.headers["content-range"], `bytes 0-3/${audio.rawPayload.length}`);
     assert.equal(part.rawPayload.toString("ascii"), "RIFF");
+  });
+
+  it("applique une dictée qui modifie et supprime des lignes existantes", async () => {
+    const api = await signUp("modif-dictee@test.fr");
+    const quote = (await api("POST", "/api/quotes", { client: { name: "Client" } })).json();
+    const window = {
+      description: "Remplacement de la fenêtre",
+      room: "Cuisine",
+      quantity: 1,
+      unit: "u",
+      vatRateBp: 550,
+    };
+    const floor = { description: "Ragréage", room: "Cuisine", quantity: 12, unit: "m2", vatRateBp: 1000 };
+    await api("POST", `/api/quotes/${quote.id}/lines`, window);
+    const withLines = (await api("POST", `/api/quotes/${quote.id}/lines`, { ...floor, unitPriceCents: 2500 })).json();
+    const [windowId, floorId] = withLines.lines.map((l: { id: string }) => l.id);
+
+    let seen: ExtractionInput["existingLines"] = [];
+    flakyExtractor.respondNext = (input) => {
+      seen = input.existingLines;
+      return {
+        lines: [{ description: "Pose de plinthes", room: "Cuisine", quantity: 8, unit: "ml", vatRateBp: 1000 }],
+        updates: [{ lineId: floorId, changes: { quantity: 15 } }],
+        deletions: [windowId],
+        warnings: [],
+      };
+    };
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/quotes/${quote.id}/clips?wait=true`,
+      headers: { "content-type": "audio/wav" },
+      cookies: api.cookies,
+      payload: sampleWav,
+    });
+    assert.equal(res.json().status, "done", res.body);
+    assert.deepEqual(
+      seen.map((l) => [l.id, l.description, l.vatRateBp]),
+      [
+        [windowId, window.description, 550],
+        [floorId, floor.description, 1000],
+      ],
+    );
+
+    const detail = (await api("GET", `/api/quotes/${quote.id}`)).json();
+    assert.deepEqual(
+      detail.lines.map((l: { description: string; quantity: number; unitPriceCents: number | null }) => [
+        l.description,
+        l.quantity,
+        l.unitPriceCents,
+      ]),
+      [
+        ["Ragréage", 15, 2500],
+        ["Pose de plinthes", 8, null],
+      ],
+    );
+    assert.deepEqual(res.json().warnings, []);
   });
 
   it("marque une dictée en échec puis la relance sans refaire la transcription", async () => {
