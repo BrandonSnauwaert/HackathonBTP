@@ -120,8 +120,7 @@ export function VisitScreen({ quoteId }: { quoteId: string }) {
           {readyAt && (
             <p className="small eta" role="status">
               Tout sera prêt dans <b>{formatRemaining(readyAt)}</b> (vers {formatTime(readyAt).slice(0, 5)})
-              {passiveMinutes > 0 &&
-                ` · ${passiveMinutes} min d'écoute passive à traiter : c'est plus long que des dictées`}
+              {passiveMinutes > 0 && ` · ${passiveMinutes} min d'écoute passive à traiter`}
             </p>
           )}
           {error && <p className="error-text">{error}</p>}
