@@ -326,6 +326,19 @@ describe("API", () => {
     assert.equal(audio.statusCode, 200);
     assert.equal(audio.headers["content-type"], "audio/wav");
     assert.equal(audio.rawPayload.toString("ascii", 0, 4), "RIFF");
+    assert.equal(audio.headers["accept-ranges"], "bytes");
+    assert.equal(Number(audio.headers["content-length"]), audio.rawPayload.length);
+
+    // Lecture par plages (Safari sur iPhone)
+    const part = await app.inject({
+      method: "GET",
+      url: `/api/quotes/${quote.id}/clips/${clip.id}/audio`,
+      headers: { range: "bytes=0-3" },
+      cookies: api.cookies,
+    });
+    assert.equal(part.statusCode, 206);
+    assert.equal(part.headers["content-range"], `bytes 0-3/${audio.rawPayload.length}`);
+    assert.equal(part.rawPayload.toString("ascii"), "RIFF");
   });
 
   it("marque une dictée en échec puis la relance sans refaire la transcription", async () => {

@@ -708,6 +708,20 @@ a {
   padding-right: 36px;
 }
 
+/* Safari (iPhone) : un champ date vide garde son apparence native, ignore min-height et s'aplatit. */
+.field input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+}
+
+.field input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.35em;
+}
+
 .field input:focus,
 .field textarea:focus,
 .field select:focus {

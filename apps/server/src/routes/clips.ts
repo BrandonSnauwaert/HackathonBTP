@@ -1,7 +1,9 @@
 import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { cookieAuth, requireUser } from "../auth/session.js";
+import { parseByteRange } from "../http/byte-range.js";
 import { ErrorResponseSchema, HttpError } from "../http/errors.js";
 import { ClipSchema, IdParams } from "../http/schemas.js";
 import { CLIP_KINDS } from "../repositories/clips.js";
@@ -121,7 +123,21 @@ export const clipRoutes: FastifyPluginAsyncZod<{ clips: ClipService; maxUploadBy
     },
     async (request, reply) => {
       const path = clips.audioPath(requireUser(request).id, request.params.id, request.params.clipId);
-      return reply.type("audio/wav").send(createReadStream(path));
+      const { size } = await stat(path);
+      reply.type("audio/wav").header("accept-ranges", "bytes");
+      // Lecture par plages : Safari (iPhone) ne lit l'audio que si le serveur répond aux `Range` par un 206.
+      const range = parseByteRange(request.headers.range, size);
+      if (range === "unsatisfiable") {
+        return reply.code(416).header("content-range", `bytes */${size}`).send();
+      }
+      if (range) {
+        return reply
+          .code(206)
+          .header("content-range", `bytes ${range.start}-${range.end}/${size}`)
+          .header("content-length", range.end - range.start + 1)
+          .send(createReadStream(path, range));
+      }
+      return reply.header("content-length", size).send(createReadStream(path));
     },
   );
 
