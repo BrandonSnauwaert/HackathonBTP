@@ -4,13 +4,21 @@ import { ApiError } from "../api/client";
 
 // L'envoi au serveur est simulé : seul le comportement de la file est testé ici.
 const uploadClip = vi.fn();
+const createQuote = vi.fn();
+const updateClient = vi.fn();
 vi.mock("../api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/client")>()),
-  api: { uploadClip: (...args: unknown[]) => uploadClip(...args) },
+  api: {
+    uploadClip: (...args: unknown[]) => uploadClip(...args),
+    createQuote: (...args: unknown[]) => createQuote(...args),
+    updateClient: (...args: unknown[]) => updateClient(...args),
+  },
 }));
 
 type Queue = typeof import("./clipQueue");
+type Visits = typeof import("./pendingVisits");
 let queue: Queue;
+let visits: Visits;
 
 const offline = () => new ApiError(0, { error: "network", message: "Serveur injoignable" });
 const refused = () => new ApiError(409, { error: "quote_locked", message: "Ce devis a déjà été envoyé" });
@@ -28,9 +36,17 @@ const settled = () => queue.syncIdle();
 beforeEach(async () => {
   // Base IndexedDB vierge et module rechargé : chaque test part d'une file vide.
   globalThis.indexedDB = new IDBFactory();
+  try {
+    localStorage.clear();
+  } catch {
+    // Pas de localStorage dans cet environnement : les visites restent en mémoire.
+  }
   vi.resetModules();
   uploadClip.mockReset();
+  createQuote.mockReset();
+  updateClient.mockReset();
   queue = await import("./clipQueue");
+  visits = await import("./pendingVisits");
 });
 
 describe("file des dictées hors connexion", () => {
@@ -135,5 +151,53 @@ describe("file des dictées hors connexion", () => {
     await reopened.syncClips();
     expect(reopened.queueState().clips).toEqual([]);
     expect(uploadClip).toHaveBeenCalledOnce();
+  });
+});
+
+describe("visite commencée hors connexion", () => {
+  const newVisit = { who: { client: { name: "Mme Martin" } }, clientName: "Mme Martin", title: "", siteAddress: "" };
+
+  it("crée le devis au retour du réseau, puis envoie ses dictées vers lui", async () => {
+    uploadClip.mockResolvedValue({});
+    createQuote.mockRejectedValue(offline());
+    const visit = visits.createLocalVisit(newVisit);
+    expect(visits.isLocalQuoteId(visit.localId)).toBe(true);
+    expect(visits.placeholderQuote(visit)).toMatchObject({ id: visit.localId, client: { name: "Mme Martin" } });
+
+    await queue.enqueueClip(clip(visit.localId, "2026-09-30T10:00:00Z"));
+    await settled();
+    // Hors connexion : ni devis, ni envoi de dictée vers un identifiant local.
+    expect(uploadClip).not.toHaveBeenCalled();
+    expect(queue.queueState().clips).toHaveLength(1);
+
+    const created: string[][] = [];
+    visits.onVisitCreated((localId, quoteId) => created.push([localId, quoteId]));
+    createQuote.mockReset();
+    createQuote.mockResolvedValue({ id: "q-real" });
+    await queue.syncClips();
+
+    expect(createQuote).toHaveBeenCalledWith(newVisit.who, "", "");
+    expect(uploadClip.mock.calls.map((call) => call[0])).toEqual(["q-real"]);
+    expect(queue.queueState().clips).toEqual([]);
+    expect(visits.hasPendingVisits()).toBe(false);
+    expect(visits.createdQuoteId(visit.localId)).toBe("q-real");
+    expect(created).toEqual([[visit.localId, "q-real"]]);
+
+    // Segment arrivé après la création (écoute passive arrêtée ensuite) : directement vers le vrai devis.
+    await queue.enqueueClip(clip(visit.localId, "2026-09-30T10:05:00Z"));
+    await settled();
+    expect(uploadClip.mock.calls.map((call) => call[0])).toEqual(["q-real", "q-real"]);
+  });
+
+  it("garde la visite et ses dictées si le serveur refuse la création", async () => {
+    uploadClip.mockResolvedValue({});
+    createQuote.mockRejectedValue(new ApiError(400, { error: "validation", message: "Nom du client obligatoire" }));
+    const visit = visits.createLocalVisit(newVisit);
+    await queue.enqueueClip(clip(visit.localId, "2026-09-30T10:00:00Z"));
+    await settled();
+
+    expect(visits.findPendingVisit(visit.localId)?.error).toBe("Nom du client obligatoire");
+    expect(uploadClip).not.toHaveBeenCalled();
+    expect(queue.queueState().clips).toHaveLength(1);
   });
 });

@@ -2,13 +2,15 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { Client } from "../api/types";
 import { oneLine, suggestClients } from "../clients/clients";
-import { errorMessage } from "../quotes/useQuote";
+import { createLocalVisit, type NewVisit } from "../offline/pendingVisits";
+import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
 
 /**
  * Infos du client, saisies au clavier avant la visite (une adresse e-mail dictée, c'est risqué).
  * Un client déjà connu est proposé dès les premières lettres : ses coordonnées se remplissent seules.
- * Crée le devis en brouillon puis ouvre l'écran de visite.
+ * Crée le devis en brouillon puis ouvre l'écran de visite. Sans réseau, la visite commence quand même :
+ * le devis sera créé au retour de la connexion (cf. offline/pendingVisits.ts).
  */
 export function NewVisitSheet({ onClose, client: preset }: { onClose: () => void; client?: Client }) {
   const [clients, setClients] = useState<Client[]>([]);
@@ -40,22 +42,34 @@ export function NewVisitSheet({ onClose, client: preset }: { onClose: () => void
     e.preventDefault();
     setError(null);
     setBusy(true);
+    // Coordonnées corrigées au passage : la fiche du client est mise à jour.
+    const clientUpdate =
+      selected && (email.trim() !== selected.email || phone.trim() !== selected.phone)
+        ? { email: email.trim(), phone: phone.trim() }
+        : undefined;
+    const visit: NewVisit = {
+      who: selected
+        ? { clientId: selected.id }
+        : {
+            client: {
+              name: name.trim(),
+              ...(email && { email: email.trim() }),
+              ...(phone && { phone: phone.trim() }),
+            },
+          },
+      ...(clientUpdate && { clientUpdate }),
+      clientName: name.trim(),
+      title: title.trim(),
+      siteAddress: siteAddress.trim(),
+    };
+    const startOffline = () => navigate({ name: "visit", id: createLocalVisit(visit).localId });
+    if (!navigator.onLine) return startOffline();
     try {
-      let who: Parameters<typeof api.createQuote>[0];
-      if (selected) {
-        // Coordonnées corrigées au passage : la fiche du client est mise à jour.
-        if (email.trim() !== selected.email || phone.trim() !== selected.phone) {
-          await api.updateClient(selected.id, { email: email.trim(), phone: phone.trim() });
-        }
-        who = { clientId: selected.id };
-      } else {
-        who = {
-          client: { name: name.trim(), ...(email && { email: email.trim() }), ...(phone && { phone: phone.trim() }) },
-        };
-      }
-      const quote = await api.createQuote(who, title.trim(), siteAddress.trim());
+      if (selected && clientUpdate) await api.updateClient(selected.id, clientUpdate);
+      const quote = await api.createQuote(visit.who, visit.title, visit.siteAddress);
       navigate({ name: "visit", id: quote.id });
     } catch (err) {
+      if (isNetworkError(err)) return startOffline();
       setError(errorMessage(err));
       setBusy(false);
     }

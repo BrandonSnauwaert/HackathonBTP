@@ -3,6 +3,8 @@ import { api } from "../api/client";
 import type { QuoteSummary } from "../api/types";
 import { Logo, type Session } from "../components/AppShell";
 import { formatToday, initials } from "../format";
+import { retryPendingVisit, usePendingVisits } from "../offline/pendingVisits";
+import { syncClips } from "../offline/clipQueue";
 import { FILTERS, isEditable, openQuote, quoteName, type FilterId } from "../quotes/status";
 import { errorMessage, isNetworkError } from "../quotes/useQuote";
 import { navigate } from "../router";
@@ -43,6 +45,7 @@ export function HomeScreen({ session }: { session: Session }) {
   const [filter, setFilter] = useState<FilterId>("all");
   const [creating, setCreating] = useState(false);
   const [sort, setSort] = useState<SortId>("priority");
+  const pendingVisits = usePendingVisits();
 
   const load = useCallback(
     () =>
@@ -107,6 +110,35 @@ export function HomeScreen({ session }: { session: Session }) {
 
       <div className="bd">
         {error && <p className="error-text">{error}</p>}
+        {pendingVisits.length > 0 && (
+          <section className="todo pending-visits">
+            <h2 className="h2">Visites hors connexion</h2>
+            {pendingVisits.map((visit) => (
+              <div key={visit.localId} className="card dash action">
+                <button className="todo-main" onClick={() => navigate({ name: "visit", id: visit.localId })}>
+                  <div className="grow">
+                    <div className="b">{visit.clientName}</div>
+                    <div className={visit.error ? "small error-text" : "small mut"}>
+                      {visit.error ??
+                        `${visit.siteAddress || visit.title || "Visite"} · devis créé au retour du réseau`}
+                    </div>
+                  </div>
+                </button>
+                {visit.error && (
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      retryPendingVisit(visit.localId);
+                      void syncClips();
+                    }}
+                  >
+                    Réessayer
+                  </button>
+                )}
+              </div>
+            ))}
+          </section>
+        )}
         {(toFollowUp.length > 0 || toPrice.length > 0) && (
           <section className="todo">
             <h2 className="h2">À faire aujourd'hui</h2>

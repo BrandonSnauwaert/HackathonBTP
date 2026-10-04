@@ -1,6 +1,7 @@
 // AudioWorklet : capte le micro, le ramène en mono 24 kHz, et envoie au thread
 // principal des blocs de 80 ms en PCM s16le (format attendu par le serveur).
-// Fichier JS servi tel quel (public/) : TypeScript n'a pas de typings pour le scope AudioWorklet.
+// Fichier JS (pas de typings TypeScript pour le scope AudioWorklet), intégré au bundle comme texte par
+// recorder.ts et chargé depuis un Blob : aucune requête réseau, l'enregistrement marche hors connexion.
 
 const TARGET_RATE = 24000;
 const CHUNK_SAMPLES = 1920; // 80 ms à 24 kHz

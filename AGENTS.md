@@ -32,7 +32,7 @@ apps/front/             application de l'artisan, « BatiDevis » (React, Vite),
   src/screens/          écrans : accueil (E1), visite (E2), devis (E3), envoi (E4), suivi (E5), clients et fiche client, mon entreprise, connexion ; fiches (client, nouvelle ligne)
   src/components/       cadre (barre latérale sur ordinateur, bandeau hors connexion), badges, bouton talkie-walkie, ligne de devis, totaux
   src/quotes/           useQuote (chargement, modifications, dictées, rafraîchissement, cache hors connexion), statuts, unités
-  src/offline/          file des dictées hors connexion (IndexedDB), envoi au retour du réseau
+  src/offline/          file des dictées hors connexion (IndexedDB) et visites commencées sans réseau, envoi au retour du réseau
   src/public-quote/     page client (E6, /d/<secret>) et aperçu artisan (/apercu/<id>)
   public/sw.js          service worker : l'application s'ouvre sans réseau (réseau d'abord, cache en secours)
   src/router.ts         navigation par hash (#/devis/:id…), sans dépendance
@@ -57,7 +57,7 @@ CONTEXTE.md             besoin, périmètre, décisions (source de vérité prod
 - [x] Mock de transcription (`TRANSCRIBER=mock`) pour travailler sans GPU
 - [x] Passage en **talkie-walkie** : clips audio au lieu du flux continu (le flux reste possible en aperçu quand le réseau est là)
 - [x] **Écoute passive** (option de la visite) : accord du client obligatoire, segments de 4 min 30 envoyés au fil de l'eau (hors connexion compris), LLM prévenu qu'il lit une conversation, temps restant estimé affiché (`estimatedReadyAt`)
-- [x] File d'attente **hors connexion** (`apps/front`) : clips stockés dans IndexedDB, synchronisés au retour du réseau. Service worker, manifest PWA, session et dernier état des devis gardés sur le téléphone, écran maintenu allumé pendant la visite.
+- [x] File d'attente **hors connexion** (`apps/front`) : clips stockés dans IndexedDB, synchronisés au retour du réseau. Service worker, manifest PWA, session et dernier état des devis gardés sur le téléphone, écran maintenu allumé pendant la visite. Une **nouvelle visite** peut commencer sans réseau (`src/offline/pendingVisits.ts`) : identifiant local `local-…`, devis créé au retour du réseau puis dictées rattachées, visites en attente listées sur l'accueil.
 - [x] SQLite : artisans, profil entreprise, clients, devis, lignes, historique
 - [x] Authentification (e-mail + mot de passe, session par cookie) et compte de démo pré-rempli (`npm run seed:demo`)
 - [x] API REST des devis : CRUD, lignes, statuts, calcul HT / TVA / TTC, points manquants, doc OpenAPI sur `/docs`
@@ -141,7 +141,7 @@ cd apps/server; npm run tunnel          # fermeture : npm run tunnel -- stop
 | `npm test` | apps/front | tests unitaires (Vitest) : tris, recherche de clients, formats, statuts, file hors connexion (IndexedDB simulée) |
 | `npm run openapi` | apps/server | après un changement d'API : met à jour `openapi.json` et régénère les types du front |
 | `npm run test:ws -- samples/chantier-fr.wav` | apps/server | streame le WAV au serveur lancé, affiche les transcriptions |
-| `npm run e2e:front` | apps/server | Chrome headless sur `apps/front` (serveur et front lancés) : ajout et modification de ligne, dictée hors connexion puis envoi au retour du réseau, aperçu sans « consulté », « consulté » sans recharger, client existant sans doublon. Crée des devis « E2E … » sur le compte de démo ; code de sortie 1 en cas d'échec (`SCREENSHOTS=dossier` pour les captures) |
+| `npm run e2e:front` | apps/server | Chrome headless sur `apps/front` (serveur et front lancés) : ajout et modification de ligne, dictée hors connexion puis envoi au retour du réseau, aperçu sans « consulté », « consulté » sans recharger, client existant sans doublon, nouvelle visite hors connexion. Crée des devis « E2E … » sur le compte de démo ; code de sortie 1 en cas d'échec (`SCREENSHOTS=dossier` pour les captures) |
 | `npm run e2e:dictation` | apps/server | Chrome headless, micro simulé par le WAV : crée un devis sur le compte de démo, maintient le bouton talkie-walkie, affiche transcription et lignes (`SCREENSHOT=x.png` pour une capture) |
 | `npm run e2e -- http://localhost:5173 samples/chantier-fr.wav 20000` | apps/server | idem pour la page « Transcription live » |
 

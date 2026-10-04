@@ -2,7 +2,8 @@
 // micro simulé par un fichier WAV. Vérifie les parcours qui ne se testent que dans un vrai navigateur :
 // ajout et modification d'une ligne (enregistrée d'un coup), dictée hors connexion envoyée au retour du réseau, page rouverte
 // sans réseau, aperçu de l'artisan qui ne compte pas comme une consultation, passage en « consulté »
-// sans recharger, client existant proposé dans « Nouvelle visite » (sans doublon).
+// sans recharger, client existant proposé dans « Nouvelle visite » (sans doublon), nouvelle visite commencée
+// hors connexion (devis créé et dictée envoyée au retour du réseau).
 //
 // Prérequis : serveur (3000) et front (5174) lancés, compte de démo (npm run seed:demo).
 // Crée un client et deux devis « E2E … » sur le compte de démo (npm run seed:demo pour repartir de zéro).
@@ -338,6 +339,51 @@ try {
       newQuote.client?.id === quote.client.id &&
       (await api("/clients")).length === clientsBefore,
     `e-mail « ${filledEmail} », client ${newQuote.client?.id} au lieu de ${quote.client.id}`,
+  );
+
+  // 8. Nouvelle visite sans réseau : visite locale, dictée gardée, devis créé au retour du réseau
+  const offlineName = `${clientName} hors ligne`;
+  await open("/#/");
+  await setOffline(true);
+  await sleep(500);
+  await clickText("button", "Nouvelle visite");
+  await sleep(400);
+  await fill("Client", offlineName);
+  await clickText(".sheet button", "Commencer la visite");
+  await sleep(1500);
+  const localHash = await ev("location.hash");
+  const offlineTalk = await centerOf(".btn.talk");
+  await mouse("mousePressed", offlineTalk);
+  await sleep(4000);
+  await mouse("mouseReleased", offlineTalk);
+  await sleep(1500);
+  await expectThat(
+    "nouvelle visite hors connexion : visite ouverte, dictée gardée sur le téléphone",
+    localHash.startsWith("#/visite/local-") &&
+      (await text("h1")).includes(offlineName) &&
+      (await text(".card.queued")).length > 0,
+    `${localHash} / ${await text("h1")}`,
+  );
+  await clickText("button", "Accueil");
+  await sleep(800);
+  await expectThat(
+    "nouvelle visite hors connexion : listée sur l'accueil en attente du réseau",
+    (await text(".pending-visits")).includes(offlineName),
+    await text(".pending-visits"),
+  );
+  await clickText(".pending-visits button", offlineName);
+  await sleep(800);
+  await setOffline(false);
+  let createdOffline = null;
+  await waitUntil(async () => {
+    const found = (await api("/quotes")).find((q) => q.client.name === offlineName);
+    createdOffline = found ? await api(`/quotes/${found.id}`) : null;
+    return createdOffline?.clips.length === 1;
+  }, 20_000);
+  await expectThat(
+    "retour du réseau : devis créé pour la visite, dictée rattachée, écran de visite resté ouvert",
+    createdOffline?.clips.length === 1 && (await ev("location.hash")) === localHash,
+    JSON.stringify({ clips: createdOffline?.clips.length, hash: await ev("location.hash") }),
   );
 
   await expectThat("aucune erreur JavaScript dans la page", pageErrors.length === 0, pageErrors.join(" / "));

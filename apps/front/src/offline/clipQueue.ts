@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { ApiError, api } from "../api/client";
 import type { ClipKind } from "../api/types";
+import { createdQuoteId, hasPendingVisits, isLocalQuoteId, syncVisits } from "./pendingVisits";
 
 /**
  * File d'attente des dictées, pour travailler sans réseau (caves, sous-sols, zones blanches).
@@ -78,7 +79,14 @@ async function syncOnce(): Promise<void> {
   try {
     // Relue à chaque fois : la file stockée sur le téléphone fait foi (page rouverte, autre onglet).
     await reload();
-    for (const clip of state.clips.filter((c) => c.error === null)) {
+    // Visites commencées hors connexion : leur devis est créé d'abord, leurs dictées lui sont rattachées.
+    if (!(await syncVisits(reassignClips))) {
+      setState({ online: false });
+      return;
+    }
+    await reload();
+    // Une dictée d'une visite dont la création a été refusée attend la correction de la visite.
+    for (const clip of state.clips.filter((c) => c.error === null && !isLocalQuoteId(c.quoteId))) {
       setState({ sending: clip.clientClipId });
       try {
         await api.uploadClip(clip.quoteId, clip.wav, clip.clientClipId, clip.recordedAt, clip.kind ?? "dictation");
@@ -101,11 +109,20 @@ async function syncOnce(): Promise<void> {
   }
 }
 
+/** Rattache au devis créé les dictées enregistrées pendant une visite hors connexion. */
+async function reassignClips(localId: string, quote: { id: string }): Promise<void> {
+  const clips = await tx<QueuedClip[]>("readonly", (store) => store.getAll() as IDBRequest<QueuedClip[]>);
+  for (const clip of clips.filter((c) => c.quoteId === localId)) {
+    await tx("readwrite", (store) => store.put({ ...clip, quoteId: quote.id }));
+  }
+}
+
 let running: Promise<void> | null = null;
 let rerun = false;
 
 /**
- * Envoie les dictées en attente, dans l'ordre ; s'arrête à la première coupure réseau.
+ * Crée les visites commencées hors connexion, puis envoie les dictées en attente, dans l'ordre ;
+ * s'arrête à la première coupure réseau.
  * Demandé pendant un envoi (nouvelle dictée, retour du réseau), un nouveau passage suit aussitôt.
  */
 export function syncClips(): Promise<void> {
@@ -129,7 +146,9 @@ export const syncIdle = (): Promise<void> => running ?? Promise.resolve();
 
 /** Ajoute une dictée à la file, puis tente l'envoi. */
 export async function enqueueClip(clip: Omit<QueuedClip, "clientClipId" | "error">): Promise<void> {
-  await tx("readwrite", (store) => store.put({ ...clip, clientClipId: crypto.randomUUID(), error: null }));
+  // Visite hors connexion dont le devis vient d'être créé : la dictée part directement vers lui.
+  const quoteId = isLocalQuoteId(clip.quoteId) ? (createdQuoteId(clip.quoteId) ?? clip.quoteId) : clip.quoteId;
+  await tx("readwrite", (store) => store.put({ ...clip, quoteId, clientClipId: crypto.randomUUID(), error: null }));
   await reload();
   void syncClips();
 }
@@ -180,7 +199,7 @@ export function startClipSync() {
   window.addEventListener("offline", () => setState({ online: false }));
   // `online` n'est pas toujours émis (Wi-Fi présent mais sans Internet) : nouvel essai régulier.
   setInterval(() => {
-    if (state.clips.some((c) => c.error === null)) void syncClips();
+    if (hasPendingVisits() || state.clips.some((c) => c.error === null)) void syncClips();
   }, RETRY_MS);
   void reload().then(syncClips, () => undefined);
 }

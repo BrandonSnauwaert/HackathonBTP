@@ -3,6 +3,13 @@ import { ApiError, api } from "../api/client";
 import type { Clip, ClipKind, QuoteDetail } from "../api/types";
 import type { RecordedClip } from "../audio/useClipRecorder";
 import { enqueueClip, onClipSent, retryQueued, useClipQueue } from "../offline/clipQueue";
+import {
+  createdQuoteId,
+  findPendingVisit,
+  isLocalQuoteId,
+  onVisitCreated,
+  placeholderQuote,
+} from "../offline/pendingVisits";
 
 /** Rafraîchissement pendant le traitement d'une dictée. */
 const POLL_MS = 1000;
@@ -27,6 +34,8 @@ export const isNetworkError = (err: unknown) => err instanceof ApiError && err.s
 const cacheKey = (quoteId: string) => `devis-vocal:quote:${quoteId}`;
 
 function readCachedQuote(quoteId: string): QuoteDetail | null {
+  const visit = isLocalQuoteId(quoteId) ? findPendingVisit(quoteId) : null;
+  if (visit) return placeholderQuote(visit);
   try {
     const raw = localStorage.getItem(cacheKey(quoteId));
     return raw ? (JSON.parse(raw) as QuoteDetail) : null;
@@ -48,13 +57,18 @@ function cacheQuote(quote: QuoteDetail) {
  * dictées (via la file hors connexion), rafraîchissement pendant le traitement d'une dictée
  * et tant que le devis attend la réponse du client.
  */
-export function useQuote(quoteId: string) {
+export function useQuote(routeQuoteId: string) {
+  // Visite commencée hors connexion (identifiant local) : dès que son devis est créé sur le serveur,
+  // on travaille sur lui. L'adresse ne change pas : l'écran n'est pas recréé, une écoute en cours continue.
+  const [quoteId, setQuoteId] = useState(() =>
+    isLocalQuoteId(routeQuoteId) ? (createdQuoteId(routeQuoteId) ?? routeQuoteId) : routeQuoteId,
+  );
   const [quote, setQuote] = useState<QuoteDetail | null>(() => readCachedQuote(quoteId));
   const [error, setError] = useState<string | null>(null);
   const queue = useClipQueue();
 
   const uploads: Upload[] = queue.clips
-    .filter((clip) => clip.quoteId === quoteId)
+    .filter((clip) => clip.quoteId === quoteId || clip.quoteId === routeQuoteId)
     .map((clip) => ({
       clientClipId: clip.clientClipId,
       waiting: !queue.online && queue.sending !== clip.clientClipId,
@@ -62,6 +76,8 @@ export function useQuote(quoteId: string) {
     }));
 
   const load = useCallback(async () => {
+    // Visite commencée hors connexion : rien à demander au serveur tant que son devis n'est pas créé.
+    if (isLocalQuoteId(quoteId)) return;
     try {
       setQuote(await api.getQuote(quoteId));
       setError(null);
@@ -88,6 +104,12 @@ export function useQuote(quoteId: string) {
     const timer = setInterval(() => void load(), processing ? POLL_MS : LIVE_POLL_MS);
     return () => clearInterval(timer);
   }, [processing, live, load]);
+
+  // Le devis de cette visite hors connexion vient d'être créé : l'écran passe dessus.
+  useEffect(
+    () => onVisitCreated((localId, created) => localId === routeQuoteId && setQuoteId(created)),
+    [routeQuoteId],
+  );
 
   // Une dictée de la file vient d'arriver sur le serveur : son traitement commence.
   useEffect(() => onClipSent((id) => id === quoteId && void load()), [quoteId, load]);
